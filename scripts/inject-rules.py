@@ -29,11 +29,11 @@ PLAN_FLOW = re.compile(
 
 ROSLYN_ACCESS = """\
 ## Roslyn access
-Default: run `roslyn-query.py <project-or-solution> <tool> '<json-args>'` through Bash (it is on
-PATH). First call per solution: `get_project_graph`. An empty result, or a solution path that is
-not the one you meant, is a mis-bind — never "clean code". Run `roslyn-query.py <solution>
---restart` after switching branches. The `mcp__cwm-roslyn-navigator__*` tools are a fallback that
-serves only the pinned solution."""
+Default: run `{bin_dir}/roslyn-query.py <project-or-solution> <tool> '<json-args>'` through Bash
+(also available as bare `roslyn-query.py` when the plugin's bin/ is on PATH). First call per solution:
+`get_project_graph`. An empty result, or a solution path that is not the one you meant, is a mis-bind —
+never "clean code". Run `roslyn-query.py <solution> --restart` after switching branches. The
+`mcp__cwm-roslyn-navigator__*` tools are a fallback that serves only the pinned solution."""
 
 SUBAGENT_HEADER = """\
 <rules-contract enforcement="mandatory">
@@ -116,7 +116,8 @@ def main():
         return 0
     rules_dir = os.path.join(PLUGIN_ROOT, "rules")
     fields = {"rules_dir": rules_dir, "contract": read(CONTRACT), "overlay": overlay_block(),
-              "roslyn": ROSLYN_ACCESS, "navigator": navigator_note()}
+              "roslyn": ROSLYN_ACCESS.format(bin_dir=os.path.join(PLUGIN_ROOT, "bin")),
+              "navigator": navigator_note()}
 
     if mode == "session":
         sys.stdout.write(SESSION_HEADER.format(**fields))

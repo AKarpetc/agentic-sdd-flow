@@ -7,7 +7,7 @@ description: >
   project, choosing or changing architecture, restructuring a solution, or
   resolving module boundary and dependency questions.
 memory: project
-tools: Read, Write, Edit, Grep, Glob, Bash, mcp__cwm-roslyn-navigator__get_project_graph, mcp__cwm-roslyn-navigator__get_dependency_graph, mcp__cwm-roslyn-navigator__find_symbol, mcp__cwm-roslyn-navigator__get_public_api, mcp__cwm-roslyn-navigator__find_references, mcp__cwm-roslyn-navigator__get_file_outline, mcp__cwm-roslyn-navigator__get_type_hierarchy, mcp__cwm-roslyn-navigator__detect_circular_dependencies, mcp__cwm-roslyn-navigator__get_diagnostics, mcp__code-analysis__analyze_project, mcp__code-analysis__analyze_solution, mcp__code-analysis__get_solution_info
+tools: Read, Write, Edit, Grep, Glob, Bash, mcp__cwm-roslyn-navigator__get_project_graph, mcp__cwm-roslyn-navigator__get_dependency_graph, mcp__cwm-roslyn-navigator__find_symbol, mcp__cwm-roslyn-navigator__get_public_api, mcp__cwm-roslyn-navigator__find_references, mcp__cwm-roslyn-navigator__get_file_outline, mcp__cwm-roslyn-navigator__get_type_hierarchy, mcp__cwm-roslyn-navigator__detect_circular_dependencies, mcp__cwm-roslyn-navigator__get_diagnostics
 ---
 
 # .NET Architect Agent

@@ -7,7 +7,7 @@ description: >
   understand the system under test and find coverage gaps. Use when asked to
   "write tests", "add unit tests", "cover this with tests", "test this handler",
   or to fill missing coverage. Writes code: creates/edits test files and runs them.
-tools: Read, Write, Edit, Grep, Glob, Bash, mcp__cwm-roslyn-navigator__find_symbol, mcp__cwm-roslyn-navigator__get_symbol_detail, mcp__cwm-roslyn-navigator__get_symbol_source, mcp__cwm-roslyn-navigator__get_file_outline, mcp__cwm-roslyn-navigator__find_references, mcp__cwm-roslyn-navigator__find_implementations, mcp__cwm-roslyn-navigator__find_callers, mcp__cwm-roslyn-navigator__get_type_hierarchy, mcp__cwm-roslyn-navigator__get_public_api, mcp__cwm-roslyn-navigator__get_test_coverage_map, mcp__cwm-roslyn-navigator__get_diagnostics, mcp__cwm-roslyn-navigator__get_project_graph, mcp__code-analysis__analyze_project, mcp__code-analysis__analyze_solution, mcp__code-analysis__get_solution_info
+tools: Read, Write, Edit, Grep, Glob, Bash, mcp__cwm-roslyn-navigator__find_symbol, mcp__cwm-roslyn-navigator__get_symbol_detail, mcp__cwm-roslyn-navigator__get_symbol_source, mcp__cwm-roslyn-navigator__get_file_outline, mcp__cwm-roslyn-navigator__find_references, mcp__cwm-roslyn-navigator__find_implementations, mcp__cwm-roslyn-navigator__find_callers, mcp__cwm-roslyn-navigator__get_type_hierarchy, mcp__cwm-roslyn-navigator__get_public_api, mcp__cwm-roslyn-navigator__get_test_coverage_map, mcp__cwm-roslyn-navigator__get_diagnostics, mcp__cwm-roslyn-navigator__get_project_graph
 ---
 
 # Tests Writer Agent
@@ -31,7 +31,7 @@ These also enforce the general rules that apply to test code too:
 - [code-convention.md](../rules/code-convention.md) — `.editorconfig` adherence, control-flow/early-return style, collections.
 - [single-type-per-file.md](../rules/single-type-per-file.md) — one top-level type per file, filename parity (applies to fixtures, `TheoryData` classes, etc.).
 
-When a project has its own nested `.agent/rules` or `.editorconfig`, the closest file wins — respect it over the global defaults.
+When a project has its own nested rules or `.editorconfig`, the closest file wins — respect it over the global defaults.
 
 ## Non-Negotiable Rules
 
@@ -65,8 +65,6 @@ get_symbol_source(symbol)     → the actual body of the system under test
 get_file_outline(path)        → the shape of a file before reading it whole
 get_project_graph             → find the matching *.Tests.(Unit|Integration) project & its refs
 ```
-
-`code-analysis` MCP (`analyze_solution`, `analyze_project`, `get_solution_info`) is available for broader structure questions.
 
 ## Workflow
 
