@@ -47,7 +47,7 @@ Claude Code, then retry.
 - `status: 'done'` → invoke `superpowers:finishing-a-development-branch`; decline merge, push
   and PR; report the branch name, the commit range and `deferred` minors.
 - `status: 'blocked'` → show `openQuestions` and `rulings` verbatim; wait for answers; rerun step
-  4 with `args.answers = { "<question>": "<answer>" }` and the same `resumeFromRunId` if the
+  4 with `args.answers = { "<taskId>": { "<question>": "<answer>" } }` and the same `resumeFromRunId` if the
   runtime offers one.
 - `status: 'unstable'` → show `rulings` (parked/stalled findings) and `deferred`; ask whether to
   run another fix wave, park them, or stop.

@@ -39,8 +39,8 @@ infrastructure facts. The overlay extends these rules; it never relaxes them.
   starting with a dot; one attribute per line.
 - Collection expressions `[]`; initialise collections in contracts (`public int[] Ids { get; init; } = [];`);
   never nullable collections; avoid `bool?`.
-- Target framework is **mixed** (mostly net9.0/net8.0). Check the project's TFM before using
-  a C# 13/14 feature. Never bump a TFM as a side effect.
+- Target frameworks vary per project. Check the project's TFM before using a C# 13/14
+  feature. Never bump a TFM as a side effect.
 - Always obey the nearest `.editorconfig`.
 
 ## Comments

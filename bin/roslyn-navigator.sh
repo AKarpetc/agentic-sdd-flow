@@ -13,7 +13,7 @@ source "$BIN/roslyn-resolve.sh"
 
 target="${ROSLYN_SOLUTION:-}"
 if [[ -z "$target" && -f "$POINTER" ]]; then
-    target="$(grep -vE '^\s*(#|$)' "$POINTER" | head -1 | tr -d '[:space:]')"
+    target="$(grep -vE '^\s*(#|$)' "$POINTER" | head -1 | sed 's/[[:space:]]*$//')"
 fi
 
 if [[ -z "$target" ]]; then

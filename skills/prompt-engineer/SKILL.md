@@ -1,5 +1,5 @@
 ---
-name: prompt-engineer-expert
+name: prompt-engineer
 description: Construct "State of the Art" System Prompts enforcing Sequential Thinking
 dependencies:
   - resources/sequential-thinking.md

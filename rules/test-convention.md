@@ -1,8 +1,3 @@
----
-trigger: always_on
----
-
-
 # Test Conventions
 
 These conventions apply to all unit and integration tests across the solution. The goal is to write clear, maintainable tests that validate behavior through outcomes rather than implementation details.

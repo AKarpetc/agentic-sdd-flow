@@ -8,7 +8,7 @@ The skills under [skills/](../skills/) listed below, the knowledge base in [know
 - [code-convention.md](code-convention.md)
 - [test-convention.md](test-convention.md)
 - [single-type-per-file.md](single-type-per-file.md)
-- the project's nearest `.editorconfig` or `.agent/rules/`
+- the project's nearest `.editorconfig` or the project's own nested rules
 
 …the convention is authoritative and the kit guidance is discarded. Never "modernize" existing code toward a kit default that these conventions forbid.
 
@@ -20,8 +20,8 @@ The skills under [skills/](../skills/) listed below, the knowledge base in [know
 | **Mediator vs MediatR** | Defaults to source-generated `Mediator`; MediatR flagged commercial | **Aligned — the kit's default is now this plugin's too.** Source-generated `Mediator` is the standard for all new services and new CQRS code ([common.md § CQRS with Mediator](common.md)). Existing MediatR services (the services listed in the overlay contract) keep MediatR; migrate only on explicit request, via [knowledge/mediatr-to-mediator-migration.md](../knowledge/mediatr-to-mediator-migration.md). Never register both in one service. |
 | **Assertions** | Plain xUnit `Assert`; FluentAssertions avoided kit-wide | **FluentAssertions v7.2.0** pinned, with `BeEquivalentTo` for object comparison ([test-convention.md](test-convention.md)). v7 is MIT/Apache and its license does not expire — the kit's commercial warning applies only to v8+, which this plugin never uses. |
 | **Mocking** | Barely opinionated | **NSubstitute only** — never Moq ([test-convention.md](test-convention.md)). |
-| **Test authoring** | The kit's own `testing`/`tdd` skills (deliberately **not** imported) | Delegate to the [tests-writer](../agents/tests-writer.md) agent / [tests-writer](../skills/tests-writer/SKILL.md) skill, or [server-tests-writer](../skills/server-tests-writer/SKILL.md) for `Projects/Server`. |
-| **Target framework / language version** | Assumes `net10.0` + C# 14 everywhere | Target frameworks are mixed: mostly **`net9.0`/`net8.0`**, some `net10.0`, plus legacy `net7.0`/`netstandard2.x`. **Check the target project's TFM before using any C# 13/14 feature.** Never bump a TFM as a side effect. |
+| **Test authoring** | The kit's own `testing`/`tdd` skills (deliberately **not** imported) | Delegate to the [tests-writer](../agents/tests-writer.md) agent / [tests-writer](../skills/tests-writer/SKILL.md) skill, or an additional per-service test skill named in the overlay contract. |
+| **Target framework / language version** | Assumes `net10.0` + C# 14 everywhere | Target frameworks vary per project (net8.0 through net10.0, some legacy netstandard2.x). **Check the target project's TFM before using any C# 13/14 feature.** Never bump a TFM as a side effect. |
 | **`IOptions<T>`** | Uses `IOptions<T>` in samples | **Never `IOptions<T>`** — `IOptionsSnapshot<T>` for scoped/transient, `IOptionsMonitor<T>` for singleton ([code-convention.md § IOptions](code-convention.md)). |
 | **Access modifiers** | Frequently `public` | Most restrictive possible — `internal` implementations, `public` interfaces ([code-convention.md](code-convention.md)). |
 | **New solutions/projects** | `.slnx`, central package management, kit folder layout | Fine for **new** projects. Do **not** restructure an existing solution, rename projects, or introduce `Directory.Packages.props` without explicit approval. |

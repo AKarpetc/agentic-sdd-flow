@@ -25,7 +25,7 @@ Assign at least this severity; escalate when the blast radius is larger.
 
 | Band | Rules | Section |
 |---|---|---|
-| **Critical** | Missing/ignored `CancellationToken`, `.Result`/`.Wait()`, `async void`, `IOptions<T>`, `DateTime.Now`, exceptions used for business flow, secrets in etcd, feature flag defaulting to `true`, `Arg.Do`, FluentAssertions v8+, Moq in a new test, stored-proc `SELECT` inserted mid-procedure | 🚨 Critical |
+| **Critical** | Missing/ignored `CancellationToken`, `.Result`/`.Wait()`, `async void`, `IOptions<T>`, `DateTime.Now`, exceptions used for business flow, feature flag defaulting to `true`, `Arg.Do`, FluentAssertions v8+, Moq in a new test | 🚨 Critical |
 | **Convention** | Primary ctor on a DI class, >1 top-level type per file, filename ≠ type name, `{ get; set; }` on a new property, missing `Result<T>`, `Dictionary<K,V>`/`IReadOnlyCollection<T>` in a gRPC contract, uninitialized contract collection, comment referencing a task/plan artefact, multi-line comment, test naming/AAA/`BeEquivalentTo` breaches | 🔴 Convention Violations |
 | **Nit** | Chained-method line breaks, attribute-per-line, brace/`else` style, named-argument suggestions, `const` over variable, expression bodies | 💡 Minor Tweaks |
 
@@ -76,7 +76,6 @@ Assign at least this severity; escalate when the blast radius is larger.
 ### A7. Configuration
 - [ ] 🔴 **No `IOptions<T>`.** `IOptionsSnapshot<T>` for scoped/transient, `IOptionsMonitor<T>` for singleton.
 - [ ] Feature flags **default to `false`** and are positively named (`NewFeatureEnabled`).
-- [ ] No secrets or sensitive data in etcd — Vault only.
 - [ ] No hardcoded configuration strings.
 
 ### A8. Logging
@@ -116,9 +115,6 @@ Assign at least this severity; escalate when the blast radius is larger.
 - [ ] No `= default` for primitives or classes (structs/generics excepted).
 - [ ] Ternary for assignments; `??` encouraged.
 - [ ] `const` over a variable where the value is constant.
-
-### A13. Database
-- [ ] 🔴 Modified stored procedures returning multiple result sets add any new `SELECT` **at the end** — inserting mid-procedure breaks existing readers.
 
 ---
 

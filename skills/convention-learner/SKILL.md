@@ -19,7 +19,7 @@ description: >
 > Where a plugin rule is explicit (no primary constructors for DI classes, source-generated Mediator for new code,
 > FluentAssertions v7 + NSubstitute, `IOptionsSnapshot`/`IOptionsMonitor`), that rule wins over any pattern you detect — report the
 > drift instead of matching it. Detection decides the things the rules leave open: suffixes, folder layout,
-> sealing, record usage, per-project idioms. Nested `.agent/rules/` and the closest `.editorconfig` win.
+> sealing, record usage, per-project idioms. The project's own nested rules and the closest `.editorconfig` win.
 
 1. **Observe before enforcing** — Never impose conventions without first analyzing the existing codebase. A project with 200 `internal sealed class` handlers should not get a new `public class` handler. Detect first, then match.
 2. **Project conventions override generic rules** — If the project uses `*Service` instead of `*Handler`, follow the project's convention even if the kit default is different. Explicit `.editorconfig` and `Directory.Build.props` rules always win.

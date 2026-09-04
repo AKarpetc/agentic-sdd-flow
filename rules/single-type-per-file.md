@@ -1,7 +1,3 @@
----
-trigger: always_on
----
-
 # Rule: Single Type Per File
 
 ## Definition

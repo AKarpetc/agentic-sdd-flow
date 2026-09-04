@@ -1,7 +1,3 @@
----
-trigger: always_on
----
-
 # Engineering Principles: .NET & Clean Architecture
 
 ## 1. Structural Integrity
@@ -18,7 +14,7 @@ trigger: always_on
 
 ## 3. C# 12+ Coding Standards
 * **Modern Collections**: Use collection expressions `[]` instead of `new List<T>()`, `new T[]`, or `Array.Empty<T>()`.
-* **Primary Constructors**: Use primary constructors for Dependency Injection in classes and handlers to eliminate boilerplate field assignments.
+* **Constructors**: No primary constructors for DI-resolved classes — explicit constructor + `private readonly _field` (see code-convention.md § Constructors).
 * **Implicit Typing**: Use `var` when the type is obvious from the right-hand side of the assignment.
 * **Immutability**: Use `record` types for DTOs, Commands, and Queries.
 
@@ -38,5 +34,5 @@ trigger: always_on
 ## 6. Prohibitions (Zero Tolerance)
 * ❌ No `.Result` or `.Wait()` on Tasks (prevents thread pool starvation).
 * ❌ No business logic inside Controllers or Entity Framework Configurations.
-* ❌ No hardcoded strings for configuration; use `IOptions<T>`.
+* ❌ No hardcoded strings for configuration; bind options and consume them through `IOptionsSnapshot<T>` / `IOptionsMonitor<T>` — never `IOptions<T>`.
 * ❌ No direct use of `DateTime.Now`; use an `IDateTimeProvider` for testability.

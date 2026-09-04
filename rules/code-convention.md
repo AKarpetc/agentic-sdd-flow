@@ -1,11 +1,7 @@
----
-trigger: always_on
----
-
 # Code Conventions
 
 > [!NOTE]
-> Tests conventions are listed separately: [Tests conventions](mdc:tests-conventions.md)
+> Test conventions are listed separately: [test-convention.md](test-convention.md)
 
 ## Table of Contents
 
@@ -57,7 +53,7 @@ trigger: always_on
 ## Git 🛣️
 
 ### Commit Messages
-🔴 **Every commit message is `<TASK-KEY>: <Description>`** — the Jira key first, a colon, then what changed. Applies to every repository under `Projects/` and to the consuming repository.
+🔴 **Every commit message is `<TASK-KEY>: <Description>`** — the Jira key first, a colon, then what changed. Applies to every repository this plugin is installed into.
 
 - **Good**: `PROJ-42: Add the order lookup endpoint`
 - **Good**: `PROJ-118: Share the sales channel id and tighten the brand tests (refactor)`
@@ -167,10 +163,6 @@ Use CSharpFunctionalExtensions for ready implementation
 ### Feature Flags
 - Must be **disabled by default** (`false`).
 - Use positive naming: `NewFeatureEnabled` (not `OldFeatureDisabled`).
-
-### Secrets & Etcd
-- **Etcd**: Do **not** store secrets or sensitive data in etcd. It is not a secret store.
-- **Vault**: Store all secrets in Vault.
 
 ---
 
@@ -305,10 +297,3 @@ Exhaustive — anything not on this list is a violation:
 - **Ternary Operator**: Encouraged for assignments.
 - **Null-Coalescing (`??`)**: Encouraged.
 - **Constants**: Use `const` over variables.
-
----
-
-## Database
-
-### Stored Procedures
-- **Backward Compatibility**: When modifying existing stored procedures that return multiple result sets, any new SELECT statements MUST be added at the **end** of the procedure. This ensures backward compatibility for existing data readers.

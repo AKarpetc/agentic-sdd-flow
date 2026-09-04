@@ -18,7 +18,7 @@ This skill runs Roslyn-powered semantic analysis through **[CWM.RoslynNavigator]
 | 🟢 **Dynamic runner** — `roslyn-query.py` | Launches its **own** navigator per solution, chosen at review time | **Default.** Works on any project, no pinning, no reconnect, no pre-install |
 | **MCP server** — `mcp__cwm-roslyn-navigator__<tool>` | One solution, fixed at server launch from `${CLAUDE_PLUGIN_DATA}/roslyn-solution` | Only when it already happens to be bound to the project under review |
 
-Both expose the same 20 tools (`detect_antipatterns`, `get_diagnostics`, `find_references`, `get_project_graph`, `get_test_coverage_map`, `detect_circular_dependencies`, `get_public_api`, …). The `mcp__code-analysis__*` tools are also available and take an explicit `solutionPath` on every call.
+Both expose the same 20 tools (`detect_antipatterns`, `get_diagnostics`, `find_references`, `get_project_graph`, `get_test_coverage_map`, `detect_circular_dependencies`, `get_public_api`, …).
 
 ### 🟢 The dynamic runner — how this skill gets Roslyn on *any* project
 
@@ -168,7 +168,6 @@ dotnet build <project-path>/<Solution>.sln -warnaserror:none -v q 2>&1 | grep -E
 dotnet test <project-path>/<Solution>.sln --no-build -v q
 ```
 
-- `mcp__code-analysis__get_solution_info` / `analyze_solution` / `analyze_project` — take `solutionPath` per call, so they work regardless of any binding. Use for structure, project inventory, and unreferenced-member checks.
 - Substitute Grep sweeps over the **changed files only** for what `detect_antipatterns` would have caught — use the full grep block at the end of [references/rule-compliance-checklist.md](references/rule-compliance-checklist.md), which already covers both the anti-patterns and this repo's rules.
 - Read every changed file in full — with no semantic index, Steps 5.5 and 6 carry the review.
 - **Declare the degradation in the output**: open *High-Level Feedback* with one line stating that Roslyn analysis was unavailable, which substitutes were used, and that blast-radius (Step 3) and coverage-map (Step 5) findings are therefore incomplete.
