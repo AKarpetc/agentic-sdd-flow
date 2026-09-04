@@ -13,8 +13,8 @@ export const meta = {
   ],
 }
 
-// Plugin agents resolve by bare name; a namespace prefix is not accepted.
-const PREFIX = ''
+// Plugin agents resolve only with the plugin namespace; a bare name would hit a same-named project agent instead.
+const PREFIX = 'agentic-sdd-flow:'
 const AGENT = {
   implementer: PREFIX + 'dotnet-implementer',
   tests: PREFIX + 'tests-writer',
