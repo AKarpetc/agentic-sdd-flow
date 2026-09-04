@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "cwm-roslyn-navigator": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/roslyn-navigator.sh",
+      "args": []
+    }
+  }
+}
