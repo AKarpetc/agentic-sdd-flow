@@ -1,0 +1,14 @@
+{
+  "name": "agentic-sdd-flow",
+  "description": "Marketplace for the agentic-sdd-flow plugin",
+  "owner": { "name": "Artyom Karpets" },
+  "plugins": [
+    {
+      "name": "agentic-sdd-flow",
+      "description": "Spec-driven agentic development flow for .NET",
+      "version": "0.1.0",
+      "source": "./",
+      "author": { "name": "Artyom Karpets" }
+    }
+  ]
+}
