@@ -55,7 +55,7 @@ Because the runner binds per review, "reviewed against the wrong solution" is no
    - **Report every breach.** No "too minor to mention". A formatting-rule breach belongs in *Convention Violations*; it does not get dropped.
    - **Surrounding legacy code is not a licence.** `code-convention.md` says to match the config, not the drift — a new violation next to ten existing ones is still a violation. Say so, and do not demand the untouched legacy be rewritten.
    - **Cite the rule.** Each finding names the file and clause it breaks (e.g. `code-convention.md § Constructors`), so the author can check it themselves.
-   - **Where [common.md](../../rules/common.md) contradicts `code-convention.md`** (primary constructors, `IOptions<T>`), `code-convention.md` wins — see [dotnet-kit-overrides.md](../../rules/dotnet-kit-overrides.md).
+   - **Where [common.md](../../rules/common.md) contradicts `code-convention.md`** (primary constructors, `IOptions<T>`), `code-convention.md` wins — see [kit-overrides.md](../../rules/kit-overrides.md).
    - **Zero rule findings is a claim that needs evidence.** On a non-trivial diff it usually means the checklist was skimmed, not that the code is perfect. Re-run the Step 5.5 sweep before asserting it.
 
 ## Review Criteria
