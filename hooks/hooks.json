@@ -1,0 +1,35 @@
+{
+  "description": "Injects the rules contract into sessions, subagents and plan-driven prompts; gates C# writes against the conventions.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/inject-rules.py\" session", "timeout": 15 }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/inject-rules.py\" subagent", "timeout": 10, "statusMessage": "Binding conventions to subagent..." }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/inject-rules.py\" prompt", "timeout": 10 }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/check-rules.py\"", "timeout": 20, "statusMessage": "Checking conventions..." }
+        ]
+      }
+    ]
+  }
+}
