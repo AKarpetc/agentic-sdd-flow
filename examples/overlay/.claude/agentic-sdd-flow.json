@@ -1,0 +1,20 @@
+{
+  "taskKeyPattern": "[A-Z][A-Z0-9]+-\\d+",
+  "plansDir": "temp/plans",
+  "adrDir": "docs/architecture/decisions",
+  "docsPaths": ["docs", "CLAUDE.md"],
+  "projects": {
+    "orders": "services/orders/Orders.sln",
+    "catalog": "services/catalog/Catalog.slnx"
+  },
+  "checks": {
+    "prefer-init": "advisory",
+    "xmldoc-brevity": "advisory"
+  },
+  "handoffs": {
+    "review-environment": "deploy-review-env",
+    "alerts": "alert-rules",
+    "dashboards": "grafana-dashboards"
+  },
+  "overlayContract": ".claude/rules/OVERLAY-CONTRACT.md"
+}
