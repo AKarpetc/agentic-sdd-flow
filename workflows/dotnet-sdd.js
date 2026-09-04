@@ -186,6 +186,12 @@ for (const t of tasks) {
     candidates.forEach((f, i) => { if (!votes[i] || !votes[i].real) rulings.push({ task: t.id, stage: 'verify', noise: f, evidence: votes[i] ? votes[i].evidence : 'verifier returned nothing' }) })
 
     if (verdict.approved && blocking.length === 0) { done.push({ task: t.id, rounds, commits: report.commits }); log(`task ${t.id}: approved after ${rounds} fix round(s)`); break }
+    if (blocking.length === 0) {
+      rulings.push({ task: t.id, stage: 'review', round, status: 'not_approved_without_findings', note: 'reviewer returned approved=false with no critical/important findings' })
+      done.push({ task: t.id, rounds, commits: report.commits })
+      log(`task ${t.id}: reviewer withheld approval without actionable findings — recorded and moving on`)
+      break
+    }
     if (round === maxFixRounds) { rulings.push({ task: t.id, status: 'unstable', parked: blocking }); log(`task ${t.id}: fix cap reached, ${blocking.length} findings parked`); break }
     const closed = feedback.filter(f => addressedIds.has(f.id)).length
     stalled = feedback.length && closed === 0 ? stalled + 1 : 0
@@ -252,5 +258,5 @@ if (!aborted) {
 }
 
 const status = aborted ? 'blocked' : (rulings.some(r => r.status === 'unstable') ? 'unstable' : 'done')
-log(`dotnet-sdd finished: ${status}, ${done.length}/${tasks.length} tasks approved, ${deferred.length} minors deferred`)
+log(`dotnet-sdd finished: ${status}, ${done.length}/${tasks.length} tasks approved, ${deferredUnique.length} minors deferred`)
 return { status, done, rulings, deferred: deferredUnique, openQuestions, finalVerdict, range: `${baseSha}..${finalHead}` }

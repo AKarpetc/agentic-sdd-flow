@@ -222,7 +222,7 @@ Every `→ tool` below is a runner call — `roslyn-query.py <project> <tool> '<
 For **each changed `.cs` file**, in this order:
 
 1. **Structure** — count top-level types (must be 1), check the filename matches the type name exactly, check the namespace is file-scoped. → §B of the checklist.
-2. **Production rules** — walk §A1–A13 of [references/rule-compliance-checklist.md](references/rule-compliance-checklist.md) against the file's actual lines. Check the **changed hunks strictly**; check untouched lines only to understand context, and never demand a rewrite of legacy the diff did not touch.
+2. **Production rules** — walk §A1–A12 of [references/rule-compliance-checklist.md](references/rule-compliance-checklist.md) against the file's actual lines. Check the **changed hunks strictly**; check untouched lines only to understand context, and never demand a rewrite of legacy the diff did not touch.
 3. **Test rules** — if the file lives in a test project, additionally walk §C1–C6. Also open the test project's `.csproj` and verify the framework gates: xUnit version, NSubstitute present, `FluentAssertions` pinned to `7.2.0`, no `Moq`.
 4. **`.editorconfig`** — verify indentation, line endings, final newline, and naming against the nearest config; flag any inline `#pragma warning disable` added for a style rule.
 
