@@ -26,3 +26,7 @@
   sits next to each copy) with platform-specific sections removed.
 - `agents/postgres-specialist.md` follows the measure-first loop of
   [yuribodo/postgres-query-optimization-skill](https://github.com/yuribodo/postgres-query-optimization-skill) (MIT).
+- `skills/optimizing-ef-core-queries` is copied from [dotnet/skills](https://github.com/dotnet/skills) (MIT).
+- `agents/migration-reviewer.md` adapts the three-layer structure of `data-migration-reviewer` in
+  [EveryInc/compound-engineering-plugin](https://github.com/EveryInc/compound-engineering-plugin) (MIT)
+  and the expand/contract checklist of [wshobson/agents](https://github.com/wshobson/agents) (MIT).

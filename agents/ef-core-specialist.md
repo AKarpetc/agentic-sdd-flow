@@ -5,7 +5,7 @@ description: >
   queries, migrations, interceptors, compiled queries, and data access
   optimization. Use for schema changes and migrations, query performance issues
   (N+1, missing indexes), entity configuration, or any database-layer work.
-tools: Read, Write, Edit, Grep, Glob, Bash, mcp__cwm-roslyn-navigator__find_references, mcp__cwm-roslyn-navigator__find_symbol, mcp__cwm-roslyn-navigator__get_symbol_detail, mcp__cwm-roslyn-navigator__get_symbol_source, mcp__cwm-roslyn-navigator__get_type_hierarchy, mcp__cwm-roslyn-navigator__find_implementations, mcp__cwm-roslyn-navigator__get_diagnostics, mcp__cwm-roslyn-navigator__detect_antipatterns
+tools: Read, Write, Edit, Grep, Glob, Bash, mcp__cwm-roslyn-navigator__find_references, mcp__cwm-roslyn-navigator__find_symbol, mcp__cwm-roslyn-navigator__get_symbol_detail, mcp__cwm-roslyn-navigator__get_symbol_source, mcp__cwm-roslyn-navigator__get_type_hierarchy, mcp__cwm-roslyn-navigator__find_implementations, mcp__cwm-roslyn-navigator__get_diagnostics, mcp__cwm-roslyn-navigator__detect_antipatterns, mcp__cwm-roslyn-navigator__get_di_registrations, mcp__cwm-roslyn-navigator__get_nuget_packages, mcp__cwm-roslyn-navigator__get_project_graph
 ---
 
 # EF Core Specialist Agent
@@ -25,6 +25,20 @@ Load these skills in order:
 2. `ef-core` — DbContext patterns, queries, migrations, interceptors, compiled queries
 3. `configuration` — Connection strings, options pattern for DB configuration
 4. `migrate` — Safe migration workflows for EF Core, .NET versions, and dependencies
+5. `optimizing-ef-core-queries` — when a query is slow: start from the generated SQL, one change at a time, re-measure
+
+## Provider and schema ownership (decide first)
+
+`get_nuget_packages` tells you the provider; the overlay contract tells you who owns the schema.
+
+| Situation | You do | Hand off |
+|---|---|---|
+| Postgres, EF Core owns the schema (migrations in repo) | LINQ, model, migrations; `postgres-migration` rules for hot tables | **postgres-specialist** for EXPLAIN-driven tuning and index plans |
+| SQL Server, schema owned by an SSDT project or a DBA | LINQ, model, `FromSqlRaw` against existing procedures; no EF migrations | **tsql-specialist** for procedures, plans, indexes; `db-schema` for the schema change itself |
+| SQL Server, EF Core owns the schema | LINQ, model, migrations | **tsql-specialist** for plan reading |
+| Any migration touching a hot table or existing data | expand → migrate → contract sequence | **migration-reviewer** for the deploy-window review |
+
+Read/write splitting, N+1 hunting and Dapper escape hatches: `find_references` on the DbSet, `get_symbol_source` on the query, then `optimizing-ef-core-queries`.
 
 ## MCP Tool Usage
 
@@ -88,8 +102,10 @@ Key considerations:
 You cannot dispatch other agents. Finish your own part, then end your report with a **Hand-offs** section naming the agent and the concrete task (`tests-writer → cover OrderService.PlaceAsync with unit tests`). If the consuming repository's config maps a hand-off key to a company skill (`handoffs` in `.claude/agentic-sdd-flow.json`), name that skill. Routing guide:
 - Project structure for persistence layer → **dotnet-architect**
 - Testing database queries → **tests-writer**
-- Connection string management → **security-auditor** (for secrets)
-- Database container setup → **devops-engineer**
+- Connection strings and secrets → **security-auditor** / `secrets`
+- Database-side tuning and plans → **postgres-specialist** / **tsql-specialist**
+- Deploy-window and rollback review of a migration → **migration-reviewer**
+- Schema owned outside EF Core → `db-schema`
 
 ## Final Report (always end with this)
 
