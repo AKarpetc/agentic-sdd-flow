@@ -26,7 +26,31 @@ Invoke `superpowers:brainstorming` with the description. Keep its approval gate.
 
 - **spike** or **bounded** → no workflow. Finish the work in this session using
   `tests-writer` for tests and the `dotnet-code-review` skill for review. Stop here.
-- **architectural** → continue.
+- **architectural** → after brainstorming's clarifying questions (its step 3) decide whether the
+  design pipeline is proportionate:
+
+  Run `architecture-design` when **any** of: the change spans two or more projects; it adds or
+  changes a data store, a table on a hot path, or a migration touching existing rows; it adds or
+  changes an external contract (gRPC service, public endpoint, published event); it introduces new
+  infrastructure (queue, cache, service); or the user asks for it. Otherwise let brainstorming's own
+  steps 4–5 (propose 2–3 approaches, present the design) carry the design and continue to step 3.
+
+### 2a. `architecture-design` (when proportionate)
+
+1. Resolve `plansDir`, `adrDir` from `.claude/agentic-sdd-flow.json` (defaults `temp/plans`,
+   `docs/architecture/decisions`), `specsDir = docs/superpowers/specs` under the repository root,
+   `slug = <TASK-KEY>-<kebab topic>`, `workDir = <plansDir>/architecture/<slug>`, and the projects
+   list `[{ name, dir, solution }]` (from `projects` in the config or the resolved project directories).
+2. First run (read-only):
+   `Workflow({ name: 'agentic-sdd-flow:architecture-design', args: { brief, projects, nfrs, workDir, adrDir, specsDir, slug } })`.
+   If the name is unknown, run it via `scriptPath: '<plugin root>/workflows/architecture-design.js'`.
+3. Present to the user, verbatim from the result: the winner and runner-up (`decision.winnerId`,
+   `decision.runnerUpId`, their summaries and estimates), the decision table, `decision.openDecisions`,
+   `threats` with `critical`/`important` severity, `data.findings`, and `unanswered` drivers. Ask
+   which proposal to approve (or what to change). **Stop until the user answers.**
+4. Second run: the same call plus `approvedProposalId` and `resumeFromRunId` from the first run.
+   It writes the ADRs and the spec; then continue with brainstorming's steps 7–8 (spec self-review,
+   user reviews the spec) on `specPath`, and go to step 3 with that spec.
 
 ## 3. Plan — `superpowers:writing-plans`
 

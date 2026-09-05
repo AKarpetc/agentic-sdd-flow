@@ -33,9 +33,16 @@ Design (approval gate) → plan → `dotnet-sdd` workflow → branch, never push
 
 Direct pieces: `/agentic-sdd-flow:dotnet-code-review`, the `tests-writer` agent,
 `Workflow({ name: 'agentic-sdd-flow:dotnet-sdd', args: { project, projectDir, plan, taskKey } })`.
+On the architectural path the entry point can run `architecture-design` first (drivers → current C4 → three lens proposals → judge panel → threat model → data review; ADRs + spec after you approve). Direct call: `Workflow({ name: 'agentic-sdd-flow:architecture-design', args: { brief, projects, workDir, adrDir, specsDir, slug } })`.
 
 Plugin agents and workflows register at session start: restart Claude Code after installing or
 updating the plugin.
+
+## Agents
+
+Workflow agents: `dotnet-implementer`, `findings-verifier`, `code-reviewer`, `tests-writer`, `design-simplicity`, `design-scalability`, `design-boundaries`, `design-judge`.
+Specialists: `dotnet-architect`, `api-designer`, `grpc-contracts`, `ef-core-specialist`, `postgres-specialist`, `tsql-specialist`, `migration-reviewer`, `security-auditor`, `performance-analyst`, `concurrency-specialist`, `devops-engineer`, `build-error-resolver`, `refactor-cleaner`, `test-quality-auditor`, `docs-sync`.
+All resolve as `agentic-sdd-flow:<name>`; none can dispatch other agents — each ends with a Hand-offs section using the keys above.
 
 ## What the plugin enforces
 
