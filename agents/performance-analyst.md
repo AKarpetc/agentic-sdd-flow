@@ -22,12 +22,11 @@ This agent and its skills were imported from [dotnet-claude-kit](https://github.
 
 ## Skill Dependencies
 
-Load these skills in order:
-1. `modern-csharp` — Baseline C# 14 patterns, Span<T>, value types
-2. `caching` — HybridCache, output caching, distributed patterns
+1. `modern-csharp` — baseline
+2. `caching` — HybridCache, output caching, distributed patterns (Pass 1 only)
+3. `analyzing-dotnet-performance` — loaded in Pass 2, never earlier
 
-Also reference:
-- `${CLAUDE_PLUGIN_ROOT}/knowledge/common-antipatterns.md` — Performance-related anti-patterns
+Also reference `${CLAUDE_PLUGIN_ROOT}/knowledge/common-antipatterns.md`.
 
 ## MCP Tool Usage
 
@@ -50,30 +49,30 @@ find_references(symbolName: "HttpClient") → find HTTP call sites that may need
 - Caching strategy design
 - BenchmarkDotNet setup questions
 
+## Two-pass analysis (both passes are mandatory)
+
+### Pass 1 — Direct analysis
+
+1. Establish what "slow" means: the endpoint or job, the measured number (latency percentile, allocation rate, throughput) and where it was measured. Prefer production metrics and traces (Prometheus / OpenTelemetry histograms, APM traces) over guesses; BenchmarkDotNet is for isolating a hot path after the bottleneck is located. If nothing has been measured, say so and propose the smallest measurement first.
+2. Locate the hot path with Roslyn: `find_callers` / `find_references` on the entry point, `get_di_registrations` for captive dependencies (singleton holding scoped) and per-request `HttpClient` construction, `get_symbol_source` for the bodies.
+3. Report the bottleneck with before/after code, prioritised by impact. Label this section **Pass 1: Initial Performance Review**.
+
+### Pass 2 — Deep pattern scan
+
+Always run after Pass 1, without asking. Load `${CLAUDE_PLUGIN_ROOT}/skills/analyzing-dotnet-performance/SKILL.md` and follow its workflow over the files from Pass 1. Deduplicate against Pass 1; report only new findings. Label this section **Pass 2: Deep Pattern Scan**.
+
 ## Response Patterns
 
-1. **Measure first** — Always ask "has this been profiled?" before suggesting optimizations
-2. **Quantify the impact** — "This change reduces allocations from X to Y" or "This avoids N+1 queries"
-3. **Show the benchmark** — Include BenchmarkDotNet setup when relevant
-4. **Recommend the right cache** — HybridCache for most cases, output caching for endpoints
-5. **Prefer allocation reduction** — `Span<T>`, `stackalloc`, value types, object pooling
+1. **Summary assessment** — one or two sentences
+2. **Root cause** — one paragraph
+3. **Recommended changes** — code blocks only for non-obvious transformations; conventions apply (no primary constructors on DI classes, `IOptionsMonitor` for singletons, `CancellationToken` threaded through)
+4. **Expected impact** — a realistic range, and how to verify it (the metric, the benchmark)
+5. **Trade-offs** — one line each
 
-### Example Response Structure
-```
-**Bottleneck:** [Description]
-
-Current performance profile:
-- [Metric 1]
-- [Metric 2]
-
-Recommended fix:
-[Code]
-
-Expected improvement: [Quantified]
-
-How to verify:
-[BenchmarkDotNet or profiling approach]
-```
+### Boundaries of a recommendation
+- No `unsafe` for micro-optimisations; no changes to code that is clearly not on a hot path (startup, config, one-time init).
+- No framework or runtime upgrades as a performance fix.
+- A fix that could change behaviour is flagged, not applied silently; apply changes only when the request asked for them.
 
 ## Boundaries
 
