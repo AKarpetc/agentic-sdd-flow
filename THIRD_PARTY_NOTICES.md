@@ -14,3 +14,7 @@
   [VoltAgent/awesome-claude-code-subagents](https://github.com/VoltAgent/awesome-claude-code-subagents) (MIT).
 - `agents/concurrency-specialist.md` is adapted from `dotnet-concurrency-specialist` in
   [Aaronontheweb/dotnet-skills](https://github.com/Aaronontheweb/dotnet-skills) (MIT).
+- `skills/sqlserver-query-plans` is copied from `query-plan-analysis` in
+  [erikdarlingdata/claude-plugins](https://github.com/erikdarlingdata/claude-plugins) (MIT).
+- `skills/tsql-reviewer` distils checklists from
+  [vince-winkintel/sql-server-skills](https://github.com/vince-winkintel/sql-server-skills) (MIT).
