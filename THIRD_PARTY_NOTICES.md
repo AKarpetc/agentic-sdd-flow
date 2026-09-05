@@ -5,3 +5,8 @@
 - The `dotnet-sdd` workflow calls the `task-brief`, `review-package` and `sdd-workspace`
   helper scripts shipped by [superpowers](https://github.com/obra/superpowers) (MIT) at runtime;
   no superpowers source is copied here.
+- `skills/run-tests`, `skills/filter-syntax`, `skills/platform-detection`, `skills/test-gap-analysis`,
+  `skills/assertion-quality`, `skills/grade-tests`, `skills/test-analysis-extensions` (dotnet.md only),
+  `skills/analyzing-dotnet-performance` and `agents/test-quality-auditor.md` are copied from
+  [dotnet/skills](https://github.com/dotnet/skills) (MIT, © .NET Foundation and Contributors) with
+  edits noted in each file's frontmatter or the plugin README.
