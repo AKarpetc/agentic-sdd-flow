@@ -1,0 +1,299 @@
+<!-- Source: joestump/claude-plugin-sdd (MIT). -->
+
+# Create an Architecture Decision Record (ADR)
+
+> **Harness portability.** This skill runs on any agent harness that loads Agent Skills — Claude Code, Codex CLI, OpenCode, Crush. Tool names used below (`AskUserQuestion`, `Task`, `TeamCreate`, `SendMessage`, `TaskCreate`, `ToolSearch`, `mcp__*`, `${CLAUDE_PLUGIN_ROOT}`) denote *capabilities*, not hard requirements: map each to your harness's equivalent or use the documented fallback per `${CLAUDE_PLUGIN_ROOT}/references/harness-compat.md`. References to `CLAUDE.md` mean the project memory file (`CLAUDE.md`, `AGENTS.md`, or `CRUSH.md`) per harness-compat § "Project Memory File". A citation of the form `shared-patterns.md § "Section"` names one `##` heading in that file — load only that section (see its "How to Read This File" note), never the whole file.
+
+You are creating a new ADR using the MADR (Markdown Architectural Decision Records) format.
+
+## Process
+
+<!-- Governing: ADR-0016 (Workspace Mode), SPEC-0014 REQ "Artifact Path Resolution" -->
+
+0. **Resolve artifact paths**: Follow the **Artifact Path Resolution** pattern from `${CLAUDE_PLUGIN_ROOT}/references/shared-patterns.md` § "Artifact Path Resolution" to determine the ADR directory. If `$ARGUMENTS` contains `--module <name>`, resolve paths relative to that module. The resolved ADR directory is referred to as `{adr-dir}` below.
+
+1. **Determine the next ADR number**: Scan `{adr-dir}` for existing `ADR-XXXX-*.md` files and increment to the next number. Start at ADR-0001 if none exist. Create `{adr-dir}` if it does not exist. If `$ARGUMENTS` is empty (ignoring flags like `--quick`, `--review` and `--module`), use `AskUserQuestion` to ask the user what decision they want to document.
+
+1a. **qmd-aware edge pre-search** (v5.0.0+):
+
+   <!-- Governing: ADR-0024 (qmd as hard dependency), SPEC-0019 REQ "qmd-Smart Authoring Skills" -->
+
+   Before drafting, qmd-search the existing ADR corpus to find related prior decisions whose IDs SHOULD appear in the new ADR's frontmatter as `supersedes`, `extends`, or `related` edges (per ADR-0023 / SPEC-0018 frontmatter DAG).
+
+   1. Construct a hybrid query per `${CLAUDE_PLUGIN_ROOT}/references/qmd-helpers.md` § "Hybrid Retrieval":
+      - `lex`: the user's description from `$ARGUMENTS` (key technologies, named systems, decision verbs)
+      - `vec`: a one-sentence framing of the decision the new ADR will make
+      - `intent: "/sdd:adr — find related prior ADRs to suggest as frontmatter edges"`
+      - `collections: ["{repo}-adrs"]` (or per-module variant in workspace mode per `qmd-helpers.md` § "This-Repo Collection Identification")
+      - `limit: 6`, `minScore: 0.3`
+
+   2. For each result above the threshold, classify the candidate edge:
+      - **supersedes**: the new ADR's description includes "replace", "deprecate", "stop using", "switch from X to Y" and the matched ADR documents X
+      - **extends**: the new ADR builds on the matched ADR's foundation without replacing it
+      - **related**: weak association — same domain, named technology, or shared concern
+
+   3. Surface the candidate edges to the user via `AskUserQuestion` BEFORE writing the file. Show each candidate with the matched ADR's ID, title, and proposed edge classification. Options for each candidate: "Include as `{edge}`", "Include as `related` instead", "Skip". The user can override the classification if the agent's guess is wrong.
+
+   4. If qmd returns zero results above the threshold, proceed without surfacing edge suggestions and emit a one-line note: "No related ADRs found — drafting from scratch."
+
+   5. On qmd unreachable / timeout per `qmd-helpers.md` § "Error Handling", surface the error and stop. Per ADR-0024, fallback paths were eliminated in v5; the failure mode is "fix qmd, retry."
+
+1b. **Choose the tier**: Every ADR is either **full** (the MADR Template below) or **lightweight** (the Lightweight Template below, requested with `--quick`). The tier follows the option space, not how important the decision feels:
+
+   - **Lightweight** when the honest alternative to the chosen option is "do not do this" — there is one viable way to do the thing, and what is worth recording is *that* it is being done and *why*. Typical: a data-model choice with a narrow trade-off, adopting a library no peer was seriously in contention with, a naming or layout convention. These decisions still deserve an ADR (best practices: don't wait for "big enough") — just not a padded options matrix or a diagram.
+   - **Full** when two or more options were genuinely viable and someone could reasonably have chosen the other. The pros and cons of the road not taken are the most valuable part of the record, so if a second real option exists the full template is mandatory.
+
+   If `--quick` is present, use the lightweight tier. If it is absent but drafting surfaces only one option you can argue for honestly — every other candidate you would list gets dismissed in its own description ("zero benefit", "not really an alternative") — stop padding and ask via `AskUserQuestion`: "This decision has one viable option. Write it as a lightweight ADR (`--quick`) instead of listing alternatives the text would immediately dismiss?" Default to lightweight when the session is non-interactive. Conversely, if `--quick` was given but a second viable option surfaces while drafting, say so and switch to the full template.
+
+2. **Choose drafting mode**: Check if `$ARGUMENTS` contains `--review`.
+
+   **Default (no `--review`)**: Single-agent mode. Research the codebase (read relevant files, understand the current architecture), draft the ADR directly, self-review against the architect's checklist in the Rules section, then write the file.
+
+   **With `--review`**: Team review mode.
+   - Tell the user: "Creating a drafting team to write and review the ADR. This takes a minute or two."
+   - Create a Claude Team with `TeamCreate` to draft and review the ADR:
+     - Spawn a **drafter** agent (`general-purpose`) to write the ADR based on the user's description: `$ARGUMENTS`
+     - Spawn an **architect** agent (`general-purpose`) to review the drafter's output for completeness, accuracy, and adherence to MADR format
+     - The architect MUST review and approve the ADR before it is finalized
+     - The drafter should research the codebase (read relevant files, understand the current architecture) before writing
+     - If `TeamCreate` fails — or is not a registered tool on this harness — fall back to single-agent mode: draft the ADR directly, then self-review against the architect's checklist in the Rules section before writing.
+
+2b. **Optional call graph embedding** (opt-in, SPEC-0034; full tier only):
+
+   <!-- Governing: ADR-0033 (cgg call graph integration), SPEC-0034 REQ "Enhanced /sdd:adr" -->
+
+   **Lightweight tier: skip this step entirely.** A lightweight ADR has no `## Architecture Diagram` section (SPEC-0003 REQ "Architecture Diagrams" exempts `tier: quick`), so there is nothing to embed a call graph into.
+
+   After the ADR body is fully drafted and before writing to disk, ask the user whether to include a call graph:
+
+   Use `AskUserQuestion` with the prompt:
+
+   > Include a call graph showing where this decision applies in the codebase? (yes / no / skip)
+
+   **Default to "no"** when: the session is non-interactive (piped input), batch/CI mode is detected, or the question times out. In those cases, proceed directly to Step 3 as if the user answered "no" — no error, no deviation from existing behavior.
+
+   **If the user answers "no" or "skip"**: Proceed to Step 3 with no call graph. The `## Architecture Diagram` section is still REQUIRED (SPEC-0003 REQ "Architecture Diagrams") — hand-author a small flowchart, sequence, or C4 diagram of the decision instead. Only the cgg-generated call graph is skipped, never the section.
+
+   **If the user answers "yes"**:
+
+   1. **Availability check**: Run `which cgg >/dev/null 2>&1`. If cgg is not found, surface the exact unavailability notice from `${CLAUDE_PLUGIN_ROOT}/references/cgg-integration.md` § "Availability Check" and proceed to Step 3 without a call graph.
+
+   2. **Derive the filter**: Extract keywords from the ADR's `## Decision Outcome` section (the chosen option name, key technology names, system names, and any verbs describing the decision). Apply the **From requirement keywords** strategy from `${CLAUDE_PLUGIN_ROOT}/references/cgg-integration.md` § "Filter Derivation Strategy" — lowercase, split on spaces/punctuation, strip stop words, compose a regex alternation. In workspace mode, use the module source directory as `<target-path>` per `${CLAUDE_PLUGIN_ROOT}/references/cgg-integration.md` § "Workspace-Mode Scoping".
+
+   3. **Invoke cgg** using the canonical invocation pattern from `${CLAUDE_PLUGIN_ROOT}/references/cgg-integration.md` § "cgg Invocation Pattern":
+      ```bash
+      timeout 30 cgg <target-path> --filter "<filter-regex>" --format mermaid 2>/tmp/cgg-stderr-$$.txt
+      CGG_EXIT=$?
+      CGG_STDERR=$(cat /tmp/cgg-stderr-$$.txt)
+      rm -f /tmp/cgg-stderr-$$.txt
+      ```
+
+   4. **Handle exit codes** per `${CLAUDE_PLUGIN_ROOT}/references/cgg-integration.md` § "Exit code handling":
+      - Exit 0: normalize the Mermaid output per § "Mermaid Output Normalization" (sort nodes, rewrite to `graph TD`, strip hash prefixes, apply 20-node cap, append legend footer).
+      - Exit 1 or other non-zero: surface `"Call graph generation failed: "` + stderr; proceed to Step 3 without a call graph.
+      - Exit 124 (timeout): surface the exact timeout message from § "Timeout Handling"; proceed to Step 3 without a call graph.
+
+   5. **Handle unsupported-language warnings** per `${CLAUDE_PLUGIN_ROOT}/references/cgg-integration.md` § "Unsupported Language Handling" — emit per-file skip notices; if all files were skipped, fall back to no call graph.
+
+   6. **Embed in the ADR**: On success, replace the `## Architecture Diagram` section with the normalized Mermaid block wrapped per `${CLAUDE_PLUGIN_ROOT}/references/cgg-integration.md` § "Embedding in markdown":
+      ```markdown
+      <!-- Call graph: <filter used>, generated <YYYY-MM-DD> -->
+      ```mermaid
+      graph TD
+          ...
+      ```
+      ```
+      The caption comment MUST record the exact filter regex used and today's date.
+
+   In every degradation case (cgg missing, timeout, non-zero exit, all files skipped), the skill MUST complete and write the ADR without a call graph — hand-authoring the `## Architecture Diagram` section as above, since the section itself is not optional. Never surface a hard failure to the user when cgg is the only failing component.
+
+3. **Write the ADR** to `{adr-dir}/ADR-XXXX-short-title.md` using the template for the tier chosen in Step 1b. Include the user-confirmed frontmatter edges from Step 1a in the YAML frontmatter (per the canonical edge schema in `${CLAUDE_PLUGIN_ROOT}/references/shared-patterns.md` § "Graph Edge Resolution"). A lightweight ADR carries `tier: quick` in its frontmatter so readers and `/sdd:audit` know the omitted sections are deliberate.
+
+3a. **Tier 1 mutation update** (v5.0.0+):
+
+   <!-- Governing: ADR-0026 (Tiered Index Freshness), SPEC-0019 REQ "Tier 1 Mutation-Aware Updates" -->
+
+   After writing the new ADR file, trigger a narrow re-sync of `{repo}-adrs` so the qmd index reflects the new artifact. Use the canonical update pattern from `${CLAUDE_PLUGIN_ROOT}/references/qmd-helpers.md` § "Update Patterns" → "Narrow update". The update is synchronous and silent on success. On failure, append a one-line warning to the report ("Index refresh failed for `{repo}-adrs` — run `/sdd:index update` manually") but report the ADR creation itself as successful.
+
+   Then check the collection's context blurb for drift per `${CLAUDE_PLUGIN_ROOT}/references/qmd-helpers.md` § "Update Patterns" → "The update maintains the index, not the context". `qmd update` refreshes the index only; a context that enumerates an ADR range (`ADR-0001 through ADR-00NN`) now excludes the ADR just written, and qmd prepends that text to every retrieved chunk. Warn in one line if it has drifted; do not rewrite it silently.
+
+4. **Clean up** the team when done (if `--review` was used).
+
+5. **Summarize** what happened (files created, decision documented, review outcome).
+
+6. **Suggest next steps**: After summarizing, tell the user:
+   - "To formalize requirements from this decision, run: `/sdd:spec {suggested capability name}`"
+   - "The spec skill can also break requirements into trackable issues (Beads, GitHub, or Gitea) for sprint planning."
+
+7. **CLAUDE.md integration**: Check if this is the first ADR (i.e., `{adr-dir}` was just created or contains only this new file). If so:
+   - Check if a `CLAUDE.md` exists at the module root (or project root for single-module projects)
+   - If it exists, check if it already references the ADR directory
+   - If no reference exists, ask the user: "I can add an Architecture Context section to your CLAUDE.md so future sessions know about your decisions. Shall I?"
+   - If the user says yes, append an `## Architecture Context` section with `- Architecture Decision Records are in {adr-dir}`
+   - If `CLAUDE.md` doesn't exist, suggest creating one
+
+### Team Handoff Protocol (only for `--review` mode)
+
+Follow the standard team handoff protocol from the plugin's `${CLAUDE_PLUGIN_ROOT}/references/shared-patterns.md` § "Team Handoff Protocol". The drafter writes the ADR; the architect reviews against the Rules checklist below.
+
+## MADR Template
+
+```markdown
+---
+# status: one of proposed | accepted | deprecated | superseded (enum enforced by /sdd:status)
+status: proposed
+date: {YYYY-MM-DD}
+decision-makers: {list}
+# Optional graph edges (per ADR-0023 / SPEC-0018). All fields are lists of artifact IDs.
+# Only include the fields that apply; omit unused fields entirely. Forward-only:
+# inverse edges (superseded-by, governed-by, implemented-by, etc.) are derived by
+# /sdd:graph at build time and MUST NOT be authored.
+# supersedes: [ADR-XXXX]              # hard replacement; target moves to status: superseded
+# extends: [ADR-XXXX]                 # builds on without replacing
+# enables: [ADR-XXXX]                 # this decision unblocks another
+# governs: [SPEC-XXXX]                # specs this decision governs
+# related: [ADR-XXXX]                 # weak association, no semantic claim
+---
+
+# ADR-XXXX: {short title, representative of solved problem and found solution}
+
+## Context and Problem Statement
+
+{Describe the context and problem statement in 2-3 sentences. Articulate the problem as a question if possible.}
+
+## Decision Drivers
+
+* {driver 1, e.g., a force, facing concern}
+* {driver 2}
+
+## Considered Options
+
+* {option 1}
+* {option 2}
+* {option 3}
+
+## Decision Outcome
+
+Chosen option: "{option}", because {justification}.
+
+### Consequences
+
+* Good, because {positive consequence}
+* Bad, because {negative consequence}
+
+### Confirmation
+
+{How will compliance/implementation be confirmed?}
+
+## Pros and Cons of the Options
+
+### {Option 1}
+
+{Description or pointer to more information.}
+
+* Good, because {argument a}
+* Good, because {argument b}
+* Neutral, because {argument c}
+* Bad, because {argument d}
+
+### {Option 2}
+
+{Description or pointer to more information.}
+
+* Good, because {argument a}
+* Bad, because {argument b}
+
+## Architecture Diagram
+
+```mermaid
+{Mermaid diagram illustrating the architecture, decision flow, or component relationships.
+Use flowchart, sequence, or C4 diagrams as appropriate.}
+```
+
+## More Information
+
+{Additional context, links to related ADRs, references.}
+```
+
+## Lightweight Template (`--quick`)
+
+For a decision with one viable option. Same frontmatter as the full template plus `tier: quick`. No Decision Drivers, no options matrix, no Architecture Diagram — the sections are omitted, not left as placeholders.
+
+```markdown
+---
+# status: one of proposed | accepted | deprecated | superseded (enum enforced by /sdd:status)
+status: proposed
+date: {YYYY-MM-DD}
+decision-makers: {list}
+tier: quick
+# Optional graph edges exactly as in the full template (supersedes / extends / enables / governs / related).
+---
+
+# ADR-XXXX: {short title, representative of solved problem and found solution}
+
+## Context and Problem Statement
+
+{1-3 sentences: what forced a decision, and what question is being answered.}
+
+## Decision
+
+{The chosen option in one or two sentences, then why it is the right call — the full template's "Chosen option: ..., because ..." line, promoted to the whole section.}
+
+## Alternative
+
+{One line naming the alternative that was actually on the table — usually "Do not do this: {what happens then}" — and why it loses. If a second real alternative belongs here, this is a full-tier ADR: switch templates.}
+
+## Consequences
+
+* Good, because {positive consequence}
+* Bad, because {negative consequence}
+
+## More Information
+
+{Optional: related ADRs, the spec this will become, the issue that prompted it.}
+```
+
+## Rules
+
+- ADR numbers MUST be sequential and zero-padded to 4 digits: ADR-0001, ADR-0002, etc.
+- Full-tier ADRs MUST include at least 2 considered options with substantive pros and cons for each
+- Lightweight ADRs (`--quick`, `tier: quick`) MUST name exactly one chosen option and one alternative (normally "do not do this"), and MUST NOT list options the text itself dismisses — a strawman option is worse than none, because it makes the record look weighed when it was not. If a second viable option exists, the ADR is full tier
+- MUST offer the lightweight tier (Step 1b) when drafting without `--quick` surfaces only one viable option, rather than padding Considered Options
+- Status starts as `proposed` -- the user decides when to mark `accepted`
+- The `status` frontmatter value MUST be exactly one of `proposed`, `accepted`, `deprecated`, `superseded` -- the same enum `/sdd:status` enforces. Free-form or differently-capitalized values (e.g. `Accepted`, `done`) break status filtering and `/sdd:list` rendering
+- Self-review (default) or architect review (`--review`) MUST check for:
+  - Completeness of all required sections for the tier — full: Context, Decision Drivers, Options, Outcome, Pros/Cons, Diagram; lightweight: Context, Decision, Alternative, Consequences
+  - Tier fit: a lightweight ADR hiding a second viable alternative, or a full ADR whose extra options are strawmen, is in the wrong tier
+  - Realistic and balanced pros/cons (not just cheerleading the chosen option)
+  - Clear decision rationale that explains "why this over alternatives"
+  - Correct MADR structure and frontmatter
+- Keep the title short and descriptive
+- Focus on the "why" -- what problem does this solve and why this solution?
+- Reference existing ADRs if this supersedes or relates to them
+- Every full-tier ADR MUST include at least one Mermaid diagram in its Architecture Diagram section, matching the mandatory section in SPEC-0003 -- use flowchart, sequence, or C4 diagrams as appropriate. When the cgg call-graph opt-in (Step 2b) is declined or unavailable, write a small hand-authored diagram instead of leaving the section empty
+- Lightweight ADRs (`tier: quick`) MUST NOT include an Architecture Diagram section -- SPEC-0003 REQ "Architecture Diagrams" exempts them, and an empty or placeholder section is worse than none
+- **v5.0.0+**: MUST run qmd-aware edge pre-search per Step 1a — surface candidate `supersedes`/`extends`/`related` edges to the user via AskUserQuestion before drafting. The user's confirmed edges land in the new ADR's frontmatter (Governing: ADR-0024, SPEC-0019 REQ "qmd-Smart Authoring Skills")
+- **v5.0.0+**: MUST trigger Tier 1 `{repo}-adrs` re-sync after writing the new file per Step 3a — best-effort, silent on success, one-line warning on failure (Governing: ADR-0026, SPEC-0019 REQ "Tier 1 Mutation-Aware Updates")
+- MUST check the `{repo}-adrs` context blurb for drift after the Tier 1 re-sync per Step 3a — the re-sync maintains the index only, and a stale context is asserted to every consumer on every query
+- **v5.0.0+**: On qmd unreachable / timeout during the edge pre-search, MUST surface the error and stop — never fall back to "draft without edge suggestions" (per ADR-0024)
+- **v5.0.0+**: MUST offer the call graph opt-in via `AskUserQuestion` per Step 2b on full-tier ADRs (never on lightweight ones) — default to "no" in non-interactive/batch/CI mode; MUST degrade gracefully on cgg absence or failure and never block ADR creation (Governing: ADR-0033, SPEC-0034 REQ "Enhanced /sdd:adr")
+
+## Graph Edge Frontmatter (per ADR-0023 / SPEC-0018)
+
+<!-- Governing: ADR-0023 (Frontmatter DAG and /sdd:graph Skill), SPEC-0018 REQ "Frontmatter Edge Schema" -->
+
+ADRs MAY declare relationships to other artifacts via optional frontmatter fields. All edge fields MUST be lists of artifact IDs (e.g., `[ADR-0008, ADR-0009]`). All edge fields are OPTIONAL — an ADR with no declared edges is valid.
+
+| Field | Meaning | Example |
+|-------|---------|---------|
+| `supersedes` | Hard replacement — the referenced ADR moves to status `superseded` | `supersedes: [ADR-0003]` |
+| `extends` | Builds on without replacing | `extends: [ADR-0008, ADR-0009]` |
+| `enables` | Unblocks a downstream decision | `enables: [ADR-0016]` |
+| `governs` | Names specs this decision governs | `governs: [SPEC-0007, SPEC-0010]` |
+| `related` | Weak association, no semantic claim | `related: [ADR-0010]` |
+
+**Forward-only convention.** Only forward edges are authored. Reverse edges (`superseded-by`, `governed-by`, `enabled-by`, `extended-by`) are derived by `/sdd:graph` at build time and MUST NOT appear in frontmatter — the graph builder will reject them with a warning. See `${CLAUDE_PLUGIN_ROOT}/references/shared-patterns.md` § "Graph Edge Resolution" for the full forward→inverse derivation table.
+
+**Cross-module edges (workspace mode).** When referencing artifacts in another module, use the quoted `[module]/ID` syntax: `governs: ["[api]/SPEC-0001"]`. The unquoted form `[[api]/SPEC-0001]` parses as YAML nested lists and will be rejected.
+
+**When to add edges.** Add edges as the relationship becomes structurally meaningful — typically at the same time you would have written "Related: ADR-XXXX" in `## More Information`. Backfilling existing ADRs is supported via `/sdd:graph backfill`, which proposes edges parsed from prose for per-file review.
