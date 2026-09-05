@@ -3,6 +3,37 @@
     "cwm-roslyn-navigator": {
       "command": "${CLAUDE_PLUGIN_ROOT}/bin/roslyn-navigator.sh",
       "args": []
+    },
+    "postgres-mcp": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "postgres-mcp==0.3.0",
+        "--with",
+        "mcp<2",
+        "postgres-mcp",
+        "--access-mode=restricted"
+      ],
+      "env": {
+        "DATABASE_URI": "${ASF_POSTGRES_URI}"
+      }
+    },
+    "mssql-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@connorbritain/mssql-mcp-reader@0.6.1"
+      ],
+      "env": {
+        "SERVER_NAME": "${ASF_MSSQL_SERVER}",
+        "DATABASE_NAME": "${ASF_MSSQL_DATABASE}",
+        "SQL_PORT": "${ASF_MSSQL_PORT:-1433}",
+        "SQL_AUTH_MODE": "sql",
+        "SQL_USERNAME": "${ASF_MSSQL_USER}",
+        "SQL_PASSWORD": "${ASF_MSSQL_PASSWORD}",
+        "TRUST_SERVER_CERTIFICATE": "${ASF_MSSQL_TRUST_CERT:-false}",
+        "READONLY": "true"
+      }
     }
   }
 }
