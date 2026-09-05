@@ -24,6 +24,8 @@ Stage reference → which file under `references/` an agent reads (resolve under
 | 6 ADR (after approval) | default agent | `decision-recorder.md`, `adr-madr.md`, `adr-process.md` | `<adrDir>/NNNN-<slug>.md` per decision |
 | 7 Spec (after approval) | default agent | `migration-planner.md`, `diagram-builder.md` | `<specsDir>/<date>-<slug>-design.md` |
 
+`references/c4-model.md` and `references/adr-process.md` were vendored as single files — use them for their templates and top-level guidance only; ignore their pointers to companion files (`mode-*.md`, `supporting-diagrams.md`, `shared-patterns.md`, …) and to tooling this plugin does not ship (`qmd`, `cgg`, `/sdd:*`, `TeamCreate`).
+
 ## Shared shapes
 
 **Driver:** `{ id: "DR3", theme: "performance", statement: "p95 < 300 ms for catalog reads", criticality: "must|should|could", evidence: "measured|stated|assumed" }`.
