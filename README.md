@@ -43,11 +43,10 @@ updating the plugin.
 PostToolUse hook rejects newly introduced violations in `.cs`/`.csproj` files. The write gate
 compares against the committed version of the file and reports only newly introduced violations,
 keyed by rule and message — a second occurrence of a violation the file already contains is not
-blocked. Full rules: `rules/`. Check ids you can tune per repository: `single-type-per-file`, `filename-parity`,
-`no-primary-ctor`, `no-ioptions`, `no-sync-over-async`, `no-async-void`, `no-datetime-now`,
-`no-moq`, `no-null-guard`, `no-arg-do`, `no-task-fromresult-stub`, `prefer-init`,
-`fluentassertions-v7`, `no-artefact-comments`, `no-inline-comments`, `xmldoc-brevity`,
-`fluentassertions`.
+blocked. Full rules: `rules/`.
+
+Check ids you can tune per repository: `single-type-per-file`, `filename-parity`, `no-primary-ctor`, `no-ioptions`, `no-sync-over-async`, `no-async-void`, `no-datetime-now`, `no-moq`,
+`no-null-guard`, `no-arg-do`, `no-task-fromresult-stub`, `prefer-init`, `fluentassertions-v7`, `no-artefact-comments`, `no-inline-comments`, `xmldoc-brevity`, `fluentassertions`.
 
 ## Company overlay
 
@@ -56,7 +55,20 @@ Everything specific to your systems lives in your repository, not in the plugin:
 - `.claude/rules/OVERLAY-CONTRACT.md` — injected after the plugin contract.
 - `.claude/agentic-sdd-flow.json` — `taskKeyPattern`, `plansDir`, `adrDir`, `docsPaths`,
   `projects` (name → solution), `checks` (`block|advisory|off` per id), `handoffs` (key → your
-  skill), `overlayContract`.
+  skill or agent), `overlayContract`.
+
+Hand-off keys the plugin's agents use (map the ones you have; unmapped keys are reported in plain words):
+
+| Key | Meaning |
+|---|---|
+| `review-environment` | raise / redeploy a review environment for a branch |
+| `alerts` | alert rules and their routing |
+| `dashboards` | metrics dashboards and panels |
+| `observability` | tracing / metrics instrumentation beyond dashboards and alerts |
+| `db-schema` | schema changes owned outside EF Core (SSDT, DBA-managed scripts) |
+| `service-tests` | a per-service test skill layered on top of `tests-writer` |
+| `ci-pipeline` | pipeline definitions owned by a platform team |
+| `secrets` | provisioning a secret in the secret manager |
 
 See `examples/overlay/`.
 

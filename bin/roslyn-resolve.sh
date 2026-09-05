@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# bash only — source from bash, not zsh (zsh returns empty output silently).
 # Resolves a project short name (or a path) to one absolute .slnx/.sln path.
 # Prints the path on success; prints the reason and returns 1 on failure.
 roslyn_resolve_solution() {

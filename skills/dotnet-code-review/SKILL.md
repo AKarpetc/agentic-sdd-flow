@@ -282,6 +282,20 @@ Within each section, order findings most-severe first. Reference locations as `F
 - Group repeats: one entry with all locations (`Foo.cs:12, 40, 61`) beats twelve identical bullets.
 - Pre-existing violations in **untouched** code are out of scope. Mention them at most as a single closing note, never as findings against this author.
 
+## Structured verdicts (workflow callers)
+
+When a caller asks for findings with a `severity` field (the `dotnet-sdd` and `architecture-design` workflows do), map the sections above to exactly three levels and give every finding a stable id:
+
+| Section | `severity` |
+|---|---|
+| 🚨 Critical Issues & Logic Flaws | `critical` |
+| 🔴 Convention Violations | `important` (a violation whose checklist floor is Critical → `critical`) |
+| 🧪 Tests & Docs Feedback | `important` when a required test or contract doc is missing; otherwise `minor` |
+| ⚠️ Refactoring Suggestions | `minor` (promote to `important` only when the pattern violation will break under a stated requirement) |
+| 💡 Minor Tweaks / Nitpicks | `minor` |
+
+Ids are `F1`, `F2`, … in the order the findings appear. On a re-review, reuse the ids you were given and report each as `addressed: true|false` before adding new ones. Findings against plan or brief files (not code) are reported as `minor` with the note `plan-text`, never as blocking.
+
 ## Decision Guide (depth vs. scope)
 
 | Scenario | Depth | Roslyn Tools |

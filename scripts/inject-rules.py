@@ -23,7 +23,7 @@ MIN_NAVIGATOR = (0, 8, 0)
 PLAN_FLOW = re.compile(
     r"subagent-driven-development|executing-plans|writing-plans|test-driven-development"
     r"|spec-coding|execute\s+(?:the\s+)?plan|выполн\w*\s+план"
-    r"|workflow|ultracode|dotnet-sdd|architecture-design|dotnet-feature",
+    r"|\bworkflow\b|ultracode|dotnet-sdd|architecture-design|dotnet-feature",
     re.IGNORECASE,
 )
 

@@ -14,7 +14,9 @@
   "handoffs": {
     "review-environment": "deploy-review-env",
     "alerts": "alert-rules",
-    "dashboards": "grafana-dashboards"
+    "dashboards": "grafana-dashboards",
+    "db-schema": "dba-schema-request",
+    "service-tests": "legacy-api-tests"
   },
   "overlayContract": ".claude/rules/OVERLAY-CONTRACT.md"
 }
