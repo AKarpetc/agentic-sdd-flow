@@ -22,7 +22,10 @@
       "command": "npx",
       "args": [
         "-y",
-        "@connorbritain/mssql-mcp-reader@0.6.1"
+        "--package=@connorbritain/mssql-mcp-reader@0.6.1",
+        "--package=@connorbritain/mssql-mcp-core@0.7.0",
+        "--",
+        "mssql-mcp-reader"
       ],
       "env": {
         "SERVER_NAME": "${ASF_MSSQL_SERVER}",
