@@ -21,7 +21,7 @@ The rules are in [code-convention.md § GRPC](../rules/code-convention.md); this
 
 ## Backward compatibility check (for a diff)
 
-1. `get_public_api` on the contracts project before and after (`git stash`-free: run it on the base commit in a temporary worktree `git worktree add /tmp/asf-base-$$ <base>`; remove it afterwards (git worktree remove /tmp/asf-base-$$)).
+1. `get_public_api` on the contracts project before and after (`git stash`-free: run it on the base commit in a temporary worktree: `W=$(mktemp -d /tmp/asf-base.XXXXXX) && git worktree add "$W" <base>`, and remove it afterwards in the same Bash call chain (`git worktree remove "$W"`)).
 2. Compare per message: a **removed** or **renumbered** `ProtoMember` → `critical`; a **type change** of an existing member → `critical`; a **new member** with a fresh number → ok; a new required semantic on an existing field → `important` (old clients send nothing).
 3. Compare per service: removed or renamed RPC → `critical`; new RPC → ok; changed request/response type → `critical` unless the old type stays serialisable.
 4. `find_references` on the changed contract types to list the consumers in the solution; name the external consumers from the overlay contract when it lists them.
