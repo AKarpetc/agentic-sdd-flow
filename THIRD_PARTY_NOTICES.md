@@ -10,3 +10,7 @@
   `skills/analyzing-dotnet-performance` and `agents/test-quality-auditor.md` are copied from
   [dotnet/skills](https://github.com/dotnet/skills) (MIT, © .NET Foundation and Contributors) with
   edits noted in each file's frontmatter or the plugin README.
+- `agents/docs-sync.md` is adapted from `docs-drift-editor` in
+  [VoltAgent/awesome-claude-code-subagents](https://github.com/VoltAgent/awesome-claude-code-subagents) (MIT).
+- `agents/concurrency-specialist.md` is adapted from `dotnet-concurrency-specialist` in
+  [Aaronontheweb/dotnet-skills](https://github.com/Aaronontheweb/dotnet-skills) (MIT).
