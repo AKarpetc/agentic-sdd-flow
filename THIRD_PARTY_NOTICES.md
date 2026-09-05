@@ -18,3 +18,11 @@
   [erikdarlingdata/claude-plugins](https://github.com/erikdarlingdata/claude-plugins) (MIT).
 - `skills/tsql-reviewer` distils checklists from
   [vince-winkintel/sql-server-skills](https://github.com/vince-winkintel/sql-server-skills) (MIT).
+- `skills/postgres-best-practices` is copied from `supabase-postgres-best-practices` in
+  [supabase/agent-skills](https://github.com/supabase/agent-skills) (MIT) with the RLS and platform
+  sections removed.
+- `skills/postgres-migration` and `skills/design-postgres-tables` are copied from
+  [timescale/pg-aiguide](https://github.com/timescale/pg-aiguide) (Apache-2.0; the NOTICE file
+  sits next to each copy) with platform-specific sections removed.
+- `agents/postgres-specialist.md` follows the measure-first loop of
+  [yuribodo/postgres-query-optimization-skill](https://github.com/yuribodo/postgres-query-optimization-skill) (MIT).
