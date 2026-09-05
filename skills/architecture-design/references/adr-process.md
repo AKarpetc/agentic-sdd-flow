@@ -1,5 +1,7 @@
 <!-- Source: joestump/claude-plugin-sdd (MIT). -->
 
+> Vendored as a single file. Use the templates and top-level guidance below only; ignore pointers to companion files (mode-*.md, supporting-diagrams.md, shared-patterns.md, …) and to tooling this plugin does not ship (qmd, cgg, /sdd:*, TeamCreate).
+
 # Create an Architecture Decision Record (ADR)
 
 > **Harness portability.** This skill runs on any agent harness that loads Agent Skills — Claude Code, Codex CLI, OpenCode, Crush. Tool names used below (`AskUserQuestion`, `Task`, `TeamCreate`, `SendMessage`, `TaskCreate`, `ToolSearch`, `mcp__*`, `${CLAUDE_PLUGIN_ROOT}`) denote *capabilities*, not hard requirements: map each to your harness's equivalent or use the documented fallback per `${CLAUDE_PLUGIN_ROOT}/references/harness-compat.md`. References to `CLAUDE.md` mean the project memory file (`CLAUDE.md`, `AGENTS.md`, or `CRUSH.md`) per harness-compat § "Project Memory File". A citation of the form `shared-patterns.md § "Section"` names one `##` heading in that file — load only that section (see its "How to Read This File" note), never the whole file.

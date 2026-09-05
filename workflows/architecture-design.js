@@ -84,7 +84,7 @@ log(`${drivers.drivers.length} drivers, ${drivers.openQuestions.length} open que
 phase('Context')
 const contextResults = await parallel(projects.map(p => () => agent(
   `${common}Document the current-state architecture of project ${p.name} only. Read <plugin root>/skills/architecture-design/references/current-architecture.md and c4-model.md. Use Roslyn: roslyn-query.py ${p.solution} get_project_graph (an empty graph is a mis-bind — retry with the explicit path), get_endpoint_map, get_di_registrations, get_nuget_packages; grep for message contracts, cache keys, gRPC services, connection strings (names only, never values). Write ${workDir}/01-context-${p.name}.md as a C4 container/component description with an evidence table, and return the JSON.`,
-  { schema: ARTIFACT, label: `context:${p.name}` })))
+  { schema: ARTIFACT, label: `context:${p.name}`, phase: 'Context' })))
 const contexts = contextResults.filter(Boolean)
 const merged = await agent(
   `${common}Merge these per-project context documents into one current-state C4 (context + containers, and components for the projects the brief touches): ${contexts.filter(Boolean).map(c => c.artifact).join(', ')}. Keep the evidence tables. Write ${workDir}/01-current-c4.md and return the JSON.`,
@@ -103,11 +103,12 @@ if (proposals.length < 2) { log(`only ${proposals.length} proposal(s) returned �
 log(`${proposals.length} proposals: ${proposals.map(p => p.id).join(', ')}`)
 
 phase('Judge')
-const panelSize = Math.max(3, Math.min(5, judges))
+const panelSize = Math.max(3, Math.min(5, Number(judges) || 3))
 const proposalFiles = proposals.map(p => `${p.id}: ${p.artifact}`).join('; ')
 const judgments = (await parallel(FOCI.slice(0, panelSize).map(focus => () => agent(
   `${common}Mode: score. Focus: ${focus}. Drivers: ${drivers.artifact}. Current state: ${currentC4}. Proposals: ${proposalFiles}. Score every proposal per your rubric and return the JUDGMENT JSON.`,
   { agentType: AGENT.judge, schema: JUDGMENT, label: `judge:${focus}` })))).filter(Boolean)
+if (judgments.length === 0) { log('judge panel returned nothing'); return { status: 'blocked', workDir, drivers, proposals, decision: null, threats: null, data: null, unanswered: [], adrPaths: [], specPath: '' } }
 const tally = {}
 for (const j of judgments) for (const s of j.scores) tally[s.proposalId] = (tally[s.proposalId] || 0) + s.total
 const ranked = proposals.map(p => p.id).sort((a, b) => (tally[b] || 0) - (tally[a] || 0))
@@ -125,12 +126,12 @@ const winner = proposals.find(p => p.id === decision.winnerId) || proposals[0]
 
 phase('Threats')
 const threats = await agent(
-  `${common}Mode: audit (read-only). Threat-model the winning design ${winner.id} (${winner.artifact}, decision ${decision.artifact}) against the current state ${currentC4}. Load <plugin root>/skills/stride-threat-model/SKILL.md and threat-mitigation-mapping/SKILL.md; verify entry points with roslyn-query.py <solution> get_endpoint_map and get_di_registrations for the projects touched. Write ${workDir}/04-threat-model.md and return the JSON (ids T1…, severity critical/important/minor).`,
+  `${common}Mode: audit (read-only). Threat-model the winning design ${winner.id} (${winner.artifact}, decision ${decision.artifact}) against the current state ${currentC4}. Load <plugin root>/skills/stride-threat-model/SKILL.md and threat-mitigation-mapping/SKILL.md; verify entry points with roslyn-query.py <solution> get_endpoint_map and get_di_registrations for the projects touched. Write ${workDir}/04-threat-model.md and return the JSON (ids T1…, severity critical/important/minor). Return JSON { artifact, threats: [{ id: "T1", category: <STRIDE category>, component, severity: critical|important|minor, mitigation }] }.`,
   { agentType: AGENT.security, schema: THREATS, label: 'threats' })
 
 phase('Data')
 const data = await agent(
-  `${common}Review the data model and migration implications of ${winner.id} (${winner.artifact}, decisions ${decision.artifact}) against the current state ${currentC4}. Deploy-window matrix, backfills, indexes on hot tables, rollback. Use the postgres-mcp / mssql-mcp tools when their environment is set; otherwise say "schema source: repository". Write ${workDir}/05-data-migration.md and return the JSON (ids M1…).`,
+  `${common}Review the data model and migration implications of ${winner.id} (${winner.artifact}, decisions ${decision.artifact}) against the current state ${currentC4}. Deploy-window matrix, backfills, indexes on hot tables, rollback. Use the postgres-mcp / mssql-mcp tools when their environment is set; otherwise say "schema source: repository". Write ${workDir}/05-data-migration.md and return the JSON (ids M1…). Return JSON { artifact, status: APPROVED|CHANGES_REQUESTED|BLOCKED, findings: [{ id: "M1", severity, issue }], sequence: [<expand/migrate/contract steps>] }.`,
   { agentType: AGENT.migration, schema: DATA, label: 'data' })
 
 phase('Critic')

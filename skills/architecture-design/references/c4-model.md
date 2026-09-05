@@ -1,5 +1,7 @@
 <!-- Source: cheriftj/c4-model-skill (MIT). -->
 
+> Vendored as a single file. Use the templates and top-level guidance below only; ignore pointers to companion files (mode-*.md, supporting-diagrams.md, shared-patterns.md, …) and to tooling this plugin does not ship (qmd, cgg, /sdd:*, TeamCreate).
+
 # C4 model — diagramming a software architecture
 
 Simon Brown's C4 model ([`c4model.com`](https://c4model.com)) describes a software architecture through four hierarchical levels of abstraction. This skill covers the full cycle around a C4 diagram: design, retro-documentation, review, update.
