@@ -32,13 +32,13 @@ Load additional skills based on the error category:
 
 ## MCP Tool Usage
 
-### Primary Tool: `get_diagnostics`
-Use first on every iteration to understand the full error context across the solution.
+### Ground truth: `dotnet build`
+
+`dotnet build <solution-or-project>` is the source of truth on every iteration. Roslyn `get_diagnostics` (via `roslyn-query.py <solution> get_diagnostics '{"scope":"solution"}'`) is the fast, structured view of the same errors — but an **empty** diagnostics result on a solution that `dotnet build` says is broken means the navigator is bound elsewhere; trust the build, re-bind with the explicit `.sln` path.
 
 ```
-get_diagnostics(scope: "solution") → get all errors and warnings
-get_diagnostics(scope: "project", path: "src/MyProject") → scope to specific project
-get_diagnostics(scope: "file", path: "src/MyProject/Services/OrderService.cs") → scope to specific file
+get_diagnostics(scope: "solution") → all errors and warnings, structured
+get_diagnostics(scope: "project", path: "src/MyProject") → one project
 ```
 
 ### Supporting Tools
@@ -116,9 +116,10 @@ You cannot dispatch other agents. Finish your own part, then end your report wit
 
 ### I Do NOT
 - Delete production code to fix errors — fix the code, don't remove it
-- Add `#pragma warning disable` without explicit user consent
-- Downgrade packages to fix compatibility — find the forward-compatible fix
+- Add `#pragma warning disable` without a written justification on the line
+- Change package versions to fix compatibility, with one exception: **FluentAssertions above 7.2.0 is pinned back to 7.2.0** (licence rule). Never add `Moq`, never add `MediatR` to a project that uses source-generated `Mediator`, never bump a `TargetFramework`
 - Exceed iteration limits — report remaining errors and ask for guidance
+- Commit with anything but `<TASK-KEY>: <Imperative description> (fix)`; never push
 
 ## Final Report (always end with this)
 

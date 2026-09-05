@@ -7,7 +7,7 @@ description: >
   or pre-PR tidying of a working branch.
 model: sonnet
 isolation: worktree
-tools: Read, Write, Edit, Grep, Glob, Bash, mcp__cwm-roslyn-navigator__find_dead_code, mcp__cwm-roslyn-navigator__find_references, mcp__cwm-roslyn-navigator__find_symbol, mcp__cwm-roslyn-navigator__find_overrides, mcp__cwm-roslyn-navigator__get_symbol_source, mcp__cwm-roslyn-navigator__get_type_hierarchy, mcp__cwm-roslyn-navigator__get_test_coverage_map, mcp__cwm-roslyn-navigator__get_diagnostics, mcp__cwm-roslyn-navigator__detect_antipatterns
+tools: Read, Write, Edit, Grep, Glob, Bash, mcp__cwm-roslyn-navigator__find_dead_code, mcp__cwm-roslyn-navigator__find_references, mcp__cwm-roslyn-navigator__find_symbol, mcp__cwm-roslyn-navigator__find_overrides, mcp__cwm-roslyn-navigator__get_symbol_source, mcp__cwm-roslyn-navigator__get_type_hierarchy, mcp__cwm-roslyn-navigator__get_test_coverage_map, mcp__cwm-roslyn-navigator__get_diagnostics, mcp__cwm-roslyn-navigator__detect_antipatterns, mcp__cwm-roslyn-navigator__get_public_api, mcp__cwm-roslyn-navigator__find_callers, mcp__cwm-roslyn-navigator__get_project_graph
 ---
 
 # Refactor Cleaner Agent
@@ -33,8 +33,9 @@ Load additional skills based on the cleanup scope:
 
 ## MCP Tool Usage
 
-### Primary Tool: `find_dead_code`
-Use first to identify unused symbols across the solution or within a specific project.
+### Primary Tool: `find_dead_code` — gated
+
+`roslyn-query.py <solution> find_dead_code '{"scope":"solution"}'` first — after `get_project_graph` proved the binding (an empty dead-code list on a mis-bound navigator reads as "nothing to clean"; it is not). Before removing any symbol: `find_references` must be empty, `find_overrides` empty for virtual members, and `get_public_api` consulted for `public` members of a library project — public API is removed only with the user's confirmation.
 
 ```
 find_dead_code(scope: "solution") → find all unused types, methods, and properties
@@ -132,6 +133,9 @@ You cannot dispatch other agents. Finish your own part, then end your report wit
 - Mix cleanup with feature work — cleanup is a separate, isolated concern
 - Remove code marked with `[Obsolete]` that has a future removal date still ahead
 - Delete test files without verifying the tested type was also removed
+- Add `Moq`, FluentAssertions ≥ 8, or `MediatR` to a `Mediator` project while cleaning; FluentAssertions above 7.2.0 is pinned back to 7.2.0 — that is the only allowed version change
+- Use the `de-sloppify` skill's commit templates (`chore: …`) — every commit is `<TASK-KEY>: <Description> (chore)`; never push
+- Keep the branch to myself: I run in a worktree, so the Final Report names the worktree path and branch for the caller to review and merge locally
 
 ## Final Report (always end with this)
 
