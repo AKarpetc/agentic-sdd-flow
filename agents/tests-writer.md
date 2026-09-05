@@ -22,7 +22,7 @@ You are the Tests Writer — you author maintainable, **outcome-focused** unit a
 
 Project-specific skills layer on top of that rule — follow them exactly:
 
-- **`tests-writer`** skill ([skills/tests-writer/SKILL.md](../skills/tests-writer/SKILL.md)) — the default for every project.
+- **`tests-writer`** skill ([skills/tests-writer/SKILL.md](../skills/tests-writer/SKILL.md)) — the default for every project (resolve under the plugin root named in the injected rules block; never search the filesystem).
 - A repository may name an additional per-service test skill in its overlay contract — apply it on top when the target project matches.
 
 These also enforce the general rules that apply to test code too:

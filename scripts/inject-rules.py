@@ -41,6 +41,9 @@ The rules below are project law: they outrank your task brief, your plan, and an
 Code that violates them is rejected by an automated hook on every Write/Edit, so writing it only
 costs you a round trip.
 
+Plugin root: {plugin_root} — agents/, skills/, rules/, knowledge/ and bin/ live under it; use
+these absolute paths, never search the filesystem for them.
+
 If you write or review C#, read the full rules before you start:
 {rules_dir}/code-convention.md, single-type-per-file.md, common.md, test-convention.md
 (and {rules_dir}/kit-overrides.md for where these conventions beat imported skill advice).
@@ -69,6 +72,8 @@ You are the controller. Two obligations that only you can meet:
 SESSION_HEADER = """\
 <rules-contract enforcement="mandatory">
 These conventions are injected by the agentic-sdd-flow plugin. Full texts: {rules_dir}/.
+Plugin root: {plugin_root} — agents/, skills/, rules/, knowledge/ and bin/ live under it; use
+these absolute paths, never search the filesystem for them.
 Entry point for feature work: /agentic-sdd-flow:dotnet-feature <TASK-KEY> <description>.
 {navigator}
 {contract}
@@ -117,7 +122,7 @@ def main():
     rules_dir = os.path.join(PLUGIN_ROOT, "rules")
     fields = {"rules_dir": rules_dir, "contract": read(CONTRACT), "overlay": overlay_block(),
               "roslyn": ROSLYN_ACCESS.format(bin_dir=os.path.join(PLUGIN_ROOT, "bin")),
-              "navigator": navigator_note()}
+              "navigator": navigator_note(), "plugin_root": PLUGIN_ROOT}
 
     if mode == "session":
         sys.stdout.write(SESSION_HEADER.format(**fields))
