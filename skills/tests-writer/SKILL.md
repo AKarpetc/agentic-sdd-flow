@@ -11,7 +11,7 @@ Governs structural, syntactic, and architectural conventions for C# unit tests a
 - **Test Framework**: `xUnit`. `nUnit` only where legacy code already uses it.
 - **Mocking**: `NSubstitute`. **Never use Moq** in new tests.
   - Exception: a pre-existing legacy test helper that wraps Moq internally — leave it as-is.
-- **Assertions**: `FluentAssertions` (v7+).
+- **Assertions**: `FluentAssertions` **7.2.0 only** — never v8+ (commercial licence).
 
 ## NSubstitute Quick Reference
 
@@ -58,6 +58,7 @@ public async Task Handle_WhenValidRequest_ShouldReturnExpectedResult()
 - **Use `BeEquivalentTo`** for object comparisons instead of asserting fields individually
 - **Do not use** discard assignments (`_ = await ...`) — assign to `subject`
 - **Single Act line** — the `// Act` block should be one statement
+- **Run the tests** — load `${CLAUDE_PLUGIN_ROOT}/skills/run-tests/SKILL.md` for the platform-correct command; the final run is a fresh build, never `--no-build`.
 
 ## Review Checklist
 

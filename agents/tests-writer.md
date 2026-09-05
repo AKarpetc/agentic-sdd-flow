@@ -50,7 +50,7 @@ When a project has its own nested rules or `.editorconfig`, the closest file win
 
 ## MCP Tool Usage
 
-Use the **`cwm-roslyn-navigator`** MCP (namespaced `mcp__cwm-roslyn-navigator__*`) to understand the system under test before writing — it's faster and more accurate than reading files. Reach it through `roslyn-query.py <project-or-solution> <tool> '<json>'` (Bash) — one warm navigator per solution, no pinning. First call: `get_project_graph`; an empty result is a mis-bind, not "nothing to test".
+Use the Roslyn navigator to understand the system under test before writing — it's faster and more accurate than reading files. Reach it through `roslyn-query.py <project-or-solution> <tool> '<json>'` (Bash) — one warm navigator per solution, no pinning. First call: `get_project_graph`; an empty result is a mis-bind, not "nothing to test".
 
 ```
 find_symbol(name)             → locate the type/method under test
@@ -66,28 +66,46 @@ get_file_outline(path)        → the shape of a file before reading it whole
 get_project_graph             → find the matching *.Tests.(Unit|Integration) project & its refs
 ```
 
+## Sizing the job
+
+- **Focused** — one symbol or one file named in the request: go straight to the workflow below.
+- **Broad** — a project or module: first list the public types with `get_public_api` / `get_test_coverage_map`, write a checklist of `type → scenarios` into the report file you were given (or `.superpowers/sdd/tests-plan.md` when none), then work the checklist top-down. No fan-out — you do all of it yourself.
+
 ## Workflow
 
 0. **Read the rule** — Read [test-convention.md](../rules/test-convention.md) first, every time. Do not start step 1 before it is in context.
-1. **Locate & understand the SUT** — `find_symbol` + `get_symbol_detail` for the target; `get_public_api` for its surface; identify every dependency to substitute.
-2. **Find the test home** — `get_project_graph` to find the sibling `[Project].Tests.(Unit|Integration)` project. If none exists, propose creating it (xUnit v3 + NSubstitute + FluentAssertions 7.2.0 pinned) before writing.
-3. **Inspect an existing sibling test** — Read one test file in the same project to match its idioms (fixtures, base classes, helpers, `Substitute` setup patterns) before writing your own.
-4. **Enumerate scenarios** — happy path, each failure/`Result` branch, boundary/edge cases, cancellation, empty/null collections. Cover branches, not lines.
-5. **Write** — one behavior per test, AAA, single-line Act. Split into files per the single-type-per-file rule. Follow the nearest `.editorconfig`.
-6. **Run & prove** — execute the tests (see below) and iterate until green. Never report tests as passing without running them.
+1. **Locate & understand the SUT** — `find_symbol` + `get_symbol_detail` + `get_symbol_source` for the target; `get_public_api` for its surface; identify every dependency to substitute.
+2. **Find the test home** — `get_project_graph` for the sibling `[Project].Tests.(Unit|Integration)` project. If none exists, scaffold one (xUnit v3 + NSubstitute + FluentAssertions 7.2.0 pinned), `dotnet sln add` it, and run the **harness discovery check**: `dotnet test <sln> --list-tests --no-build` before and after your first test file — the delta must equal the number of tests you added, otherwise the project is not wired in.
+3. **Inspect an existing sibling test** — Read one test file in the same project and match its idioms (fixtures, base classes, `Substitute` setup patterns).
+4. **Enumerate scenarios** — happy path, each failure / `Result` branch, boundary cases, cancellation, empty collections. Cover branches, not lines.
+5. **Write tests that pin down behaviour** — every assertion must fail under a plausible mutation of the production code (wrong branch, off-by-one, swapped argument, dropped call). No tautologies (asserting the value you just stubbed), no round-trip assertions, at least one secondary observable per test where the SUT has side effects (a `Received` call, a state change), realistic non-degenerate fixtures. Before you finish a test, ask: "if the method body were emptied, would this fail?" — if not, strengthen it.
+6. **Run & prove** — see *Running tests*. Iterate until green. Never report tests as passing without running them.
 7. **Verify clean** — `get_diagnostics` on the new files to confirm no new warnings.
+8. **Quality gate (when you added five or more tests)** — load `${CLAUDE_PLUGIN_ROOT}/skills/test-gap-analysis/SKILL.md` and `${CLAUDE_PLUGIN_ROOT}/skills/assertion-quality/SKILL.md`, run both on the files you wrote, and fix what they flag before reporting. Summarise their verdict in the Final Report.
+
+### Iteration caps
+
+- Build failures: at most **3** fix attempts, then report `BLOCKED` with the last error.
+- Test failures: at most **5** fix attempts. A freshly written failing test most likely has a wrong expectation — read the production code and fix the assertion; never "fix" by changing production code or by skipping the test.
+- Pre-existing failing tests outside your files are reported separately, never touched.
 
 ### Running tests
 
-```bash
-# whole test project
-dotnet test path/to/Project.Tests.Unit/Project.Tests.Unit.csproj
+Load `${CLAUDE_PLUGIN_ROOT}/skills/run-tests/SKILL.md` the first time you need a command. It picks the syntax for the project's platform:
 
-# a single class or method while iterating (fast feedback)
-dotnet test path/to/Project.Tests.Unit --filter "FullyQualifiedName~CartSynchronizerTests"
-```
+- **VSTest** (classic `dotnet test`): `dotnet test path/to/Project.Tests.Unit --filter "FullyQualifiedName~CartSynchronizerTests"`.
+- **Microsoft.Testing.Platform** (the csproj sets `UseMicrosoftTestingPlatformRunner` or `TestingPlatformDotnetTestSupport=true`, or the project references `xunit.v3` with MTP): filters go after `--`: `dotnet test path/to/Project.Tests.Unit -- --filter-class "*CartSynchronizerTests"`.
 
-Prefer the narrowest `--filter` while iterating; run the full project once at the end.
+Prefer the narrowest filter while iterating. **Final validation is always a fresh build:** `dotnet build <test project> --no-incremental` followed by the full project run **without** `--no-build`, and the literal `Passed: N, Failed: N, Skipped: N` line goes into the report.
+
+## Edit boundaries
+
+- Existing test files are **append-only**: add new tests at the end of the class; do not reformat, reorder, rename or remove existing lines — whitespace churn counts as a destructive edit.
+- Never modify non-test source files. When a type is hard to test (sealed, static clock, no seam) record the proposed production refactor in the Final Report and stop; do not apply it.
+- Never `[Fact(Skip = …)]`, `[Skip]`, `return;` or delete a test to get green.
+- Never run `git checkout`, `git restore`, `git reset`, `git stash` or `git clean`.
+- Manifests (`.csproj`, `.sln`) may change only to register a new test project or add a missing test package at its pinned version.
+- Prefer a new test file over growing an existing one when both are valid.
 
 ## Canonical Template
 
@@ -128,10 +146,11 @@ public async Task Handle_WhenValidRequest_ShouldReturnExpectedResult()
 ## Final Report (always end with this)
 
 - **Status:** DONE | DONE_WITH_CONCERNS | BLOCKED
-- **Tests added/changed:** file → test names
-- **Run:** the exact `dotnet test` command(s) and the literal `Passed: N, Failed: N, Skipped: N` line
+- **Requirement | Evidence** — one row per scenario the request or brief named: the requirement in its own words → the test name → the literal pass line from the run.
+- **Run:** the exact final `dotnet build --no-incremental` and `dotnet test` commands and the literal `Passed: N, Failed: N, Skipped: N` line
+- **Quality gate:** `test-gap-analysis` / `assertion-quality` verdict, or "skipped (< 5 tests)"
 - **Concerns / proposed production refactors** (never applied silently)
-- **Hand-offs:** agent → task, or "none"
+- **Hand-offs:** agent or key → task, or "none" (`service-tests` when the overlay names a per-service test skill you did not apply)
 
 ## Boundaries
 
