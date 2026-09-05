@@ -81,7 +81,7 @@ get_project_graph             → find the matching *.Tests.(Unit|Integration) p
 5. **Write tests that pin down behaviour** — every assertion must fail under a plausible mutation of the production code (wrong branch, off-by-one, swapped argument, dropped call). No tautologies (asserting the value you just stubbed), no round-trip assertions, at least one secondary observable per test where the SUT has side effects (a `Received` call, a state change), realistic non-degenerate fixtures. Before you finish a test, ask: "if the method body were emptied, would this fail?" — if not, strengthen it.
 6. **Run & prove** — see *Running tests*. Iterate until green. Never report tests as passing without running them.
 7. **Verify clean** — `get_diagnostics` on the new files to confirm no new warnings.
-8. **Quality gate (when you added five or more tests)** — load `${CLAUDE_PLUGIN_ROOT}/skills/test-gap-analysis/SKILL.md` and `${CLAUDE_PLUGIN_ROOT}/skills/assertion-quality/SKILL.md`, run both on the files you wrote, and fix what they flag before reporting. Summarise their verdict in the Final Report.
+8. **Quality gate (when you added five or more tests)** — load `${CLAUDE_PLUGIN_ROOT}/skills/test-gap-analysis/SKILL.md` and `${CLAUDE_PLUGIN_ROOT}/skills/assertion-quality/SKILL.md`, run both on the files you wrote, and fix what they flag before reporting. Summarise their verdict in the Final Report. The vendored test skills were copied as single files: follow their own workflow and ignore pointers to skills this plugin does not ship (test-anti-patterns, test-smell-detection, coverage-analysis, crap-score, test-tagging, mtp-hot-reload).
 
 ### Iteration caps
 

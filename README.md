@@ -42,7 +42,7 @@ updating the plugin.
 
 Workflow agents: `dotnet-implementer`, `findings-verifier`, `code-reviewer`, `tests-writer`, `design-simplicity`, `design-scalability`, `design-boundaries`, `design-judge`.
 Specialists: `dotnet-architect`, `api-designer`, `grpc-contracts`, `ef-core-specialist`, `postgres-specialist`, `tsql-specialist`, `migration-reviewer`, `security-auditor`, `performance-analyst`, `concurrency-specialist`, `devops-engineer`, `build-error-resolver`, `refactor-cleaner`, `test-quality-auditor`, `docs-sync`.
-All resolve as `agentic-sdd-flow:<name>`; none can dispatch other agents — each ends with a Hand-offs section using the keys above.
+All resolve as `agentic-sdd-flow:<name>` and none can dispatch other agents. Specialists end with a Hand-offs section using the keys listed under *Company overlay*; workflow agents return JSON instead.
 
 ## What the plugin enforces
 
@@ -105,6 +105,7 @@ Notes on the pins:
 - Never install the unscoped npm package `mssql-mcp-server` — that name belongs to an unrelated author. The scoped `@connorbritain/*` packages are the right ones, and the repository has no root `package.json`, so `npx github:ConnorBritain/mssql-mcp-server#<sha>` cannot work.
 - Both npm packages are pinned, because the code that runs lives in the core and the reader depends on it as a floating `^0.7.0`. An explicit `--package=<name>@<version>` overrides that range at install time, so the launch line names reader and core separately.
 - The SQL Server server writes an audit log to `logs/audit.jsonl` under the working directory. Set `AUDIT_LOGGING=false` or `AUDIT_LOG_PATH` to move or silence it.
+- A repository that never uses them can leave the `ASF_*` variables unset (the servers fail closed) or remove the two entries from its own `.mcp.json` override.
 
 ## Runtime notes
 
@@ -123,3 +124,4 @@ Notes on the pins:
 - Resume works across process restarts: `resumeFromRunId` replayed 16 cached agents and re-dispatched only the agent that had not reported.
 - A reviewer without the plugin root in context once ran a filesystem-wide `find` and stalled the run; the injected block now names the plugin root and the agents are told never to search for their skills.
 - DB MCP servers: postgres-mcp resolves via `uvx` only with `--with "mcp<2"` (its own `mcp>=1.5.0` range pulls the incompatible 2.x SDK); mssql-mcp runs the reader-tier `@connorbritain/mssql-mcp-reader@0.6.1` pinned over `@connorbritain/mssql-mcp-core@0.7.0`, both named explicitly so the reader's floating `^0.7.0` on the core cannot drift. The audit read the published `@connorbritain/mssql-mcp-core@0.7.0` tarball — where all the behaviour lives — plus the reader 0.6.1 tarball; `ConnorBritain/mssql-mcp-server` commit `b41251d5c447e00ebbdeb7be62a2f78f206afbdd` is the provenance of the shim and docs only, and carries no root `package.json`. Neither tarball has install scripts, and the only non-database network paths (Vault, Azure Key Vault, HTTP/syslog/CloudWatch audit sinks) are unreachable unless `ENVIRONMENTS_CONFIG_PATH` configures them. Live checks against a development database are pending — no `ASF_*` variables on the authoring machine; the SQL Server server was confirmed to launch and exit cleanly with a missing-configuration error when they are unset.
+- Plugin-declared MCP servers surface as mcp__plugin_agentic-sdd-flow_<server>__<tool>; the DB agents list both that and the bare spelling. The Roslyn fallback server is listed bare in every agent (its primary path is roslyn-query.py over Bash) — verify the prefixed spelling at the next trial.

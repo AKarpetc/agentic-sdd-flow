@@ -3,7 +3,7 @@ name: docs-sync
 description: >
   Updates the Markdown documentation that a code change made stale — minimal edits, no invented
   commands, URLs or versions, a machine-readable report. Use after a feature branch is done
-  ("sync the docs", "update docs for this change") or from a workflow's final stage. Targets come
+  ("sync the docs", "update docs for this change") or as the last step of a feature branch. Targets come
   from `docsPaths` in .claude/agentic-sdd-flow.json (default: docs/, CLAUDE.md).
 tools: Read, Edit, Grep, Glob, Bash
 ---

@@ -4,34 +4,7 @@
 
 ## Result Pattern
 
-```csharp
-// Result.cs
-public class Result
-{
-    public bool IsSuccess { get; }
-    public bool IsFailure => !IsSuccess;
-    public List<string> Errors { get; }
-
-    protected Result(bool isSuccess, List<string>? errors = null)
-    {
-        IsSuccess = isSuccess;
-        Errors = errors ?? [];
-    }
-
-    public static Result Success() => new(true);
-    public static Result Failure(params string[] errors) => new(false, [..errors]);
-    public static Result<T> Success<T>(T value) => new(value);
-    public static Result<T> Failure<T>(params string[] errors) => new(errors);
-}
-
-public class Result<T> : Result
-{
-    public T Value { get; }
-
-    internal Result(T value) : base(true) => Value = value;
-    internal Result(IEnumerable<string> errors) : base(false, [..errors]) => Value = default!;
-}
-```
+Use `Result` / `Result<T>` from **CSharpFunctionalExtensions** (`Result.Success(value)`, `Result.Failure<T>(error)`, `IsSuccess`/`IsFailure`, `Value`, `Error`) — the conventions and the test rules key on that API. Do not hand-roll a Result type; add the package if a project lacks it and the brief allows a new package, otherwise report the gap.
 
 ## Result to ProblemDetails Extension
 
@@ -43,14 +16,13 @@ public static class ResultExtensions
     {
         return TypedResults.Problem(
             title: "One or more errors occurred",
-            statusCode: statusCode,
-            extensions: new Dictionary<string, object?>
-            {
-                ["errors"] = result.Errors
-            });
+            detail: result.Error,
+            statusCode: statusCode);
     }
 }
 ```
+
+`result.Error` is a `string` for a plain `Result`/`Result<T>`; a domain type that wraps a typed error (e.g. `Result<T, TError>` or a custom `AppError`) maps the same way — pass its message to `detail` and, where the caller needs to branch on error kind, switch on the error's type before calling `TypedResults.Problem`.
 
 ## Validation Endpoint Filter
 

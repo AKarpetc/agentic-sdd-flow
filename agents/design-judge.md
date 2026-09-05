@@ -3,7 +3,7 @@ name: design-judge
 description: >
   Judge for the architecture-design workflow. Modes: score (rate every proposal against the
   fixed rubric), refute (attack the winner), synthesise (merge the panel into a decision table).
-  Read-only.
+  Writes only its own artifact under the work directory.
 tools: Read, Write, Grep, Glob, Bash, mcp__cwm-roslyn-navigator__get_project_graph, mcp__cwm-roslyn-navigator__get_endpoint_map, mcp__cwm-roslyn-navigator__find_references
 ---
 

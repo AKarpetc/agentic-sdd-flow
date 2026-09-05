@@ -2,7 +2,7 @@
 name: design-boundaries
 description: >
   Architecture proposal lens for the architecture-design workflow: ownership, bounded contexts,
-  contracts and dependency direction first. Read-only; returns one proposal in the shared JSON
+  contracts and dependency direction first. Writes only its own artifact under the work directory; returns one proposal in the shared JSON
   shape and writes it under the work directory.
 tools: Read, Write, Grep, Glob, Bash, mcp__cwm-roslyn-navigator__get_project_graph, mcp__cwm-roslyn-navigator__get_dependency_graph, mcp__cwm-roslyn-navigator__get_endpoint_map, mcp__cwm-roslyn-navigator__get_di_registrations, mcp__cwm-roslyn-navigator__get_public_api, mcp__cwm-roslyn-navigator__find_references, mcp__cwm-roslyn-navigator__get_symbol_source
 ---

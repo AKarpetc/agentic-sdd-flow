@@ -19,7 +19,7 @@ Stage reference → which file under `references/` an agent reads (resolve under
 | 2 Proposals | `design-simplicity`, `design-scalability`, `design-boundaries` | `proposal-builder.md` | `02-proposal-<lens>.md` |
 | 3 Judge | `design-judge` × N, one refuter, one synthesiser | `review-rubric.md`, `scenario-compare.md` | `03-decision.md` — scores, winner, runner-up, decision table |
 | 4 Threats | `security-auditor` (audit mode) | `stride-threat-model`, `threat-mitigation-mapping` skills | `04-threat-model.md` |
-| 5 Data | `migration-reviewer` | `postgres-migration`, `ssdt-reviewer` skills | `05-data-migration.md` |
+| 5 Data | `migration-reviewer` | `postgres-migration`, `ssdt-reviewer` skills | — (returns JSON; the spec stage embeds it) |
 | — Critic | default agent | all of the above | `06-completeness.md` — drivers without an answer |
 | 6 ADR (after approval) | default agent | `decision-recorder.md`, `adr-madr.md`, `adr-process.md` | `<adrDir>/NNNN-<slug>.md` per decision |
 | 7 Spec (after approval) | default agent | `migration-planner.md`, `diagram-builder.md` | `<specsDir>/<date>-<slug>-design.md` |

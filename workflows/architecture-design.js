@@ -62,7 +62,7 @@ const SYNTHESIS = { type: 'object', required: ['winnerId', 'runnerUpId', 'incorp
 const THREATS = { type: 'object', required: ['artifact', 'threats'],
   properties: { artifact: { type: 'string' }, threats: { type: 'array', items: { type: 'object', required: ['id', 'category', 'component', 'severity', 'mitigation'],
     properties: { id: { type: 'string' }, category: { type: 'string' }, component: { type: 'string' }, severity: { enum: ['critical', 'important', 'minor'] }, mitigation: { type: 'string' } } } } } }
-const DATA = { type: 'object', required: ['artifact', 'status', 'findings', 'sequence'],
+const DATA = { type: 'object', required: ['status', 'findings', 'sequence'],
   properties: { artifact: { type: 'string' }, status: { enum: ['APPROVED', 'CHANGES_REQUESTED', 'BLOCKED'] },
     findings: { type: 'array', items: { type: 'object', required: ['id', 'severity', 'issue'], properties: { id: { type: 'string' }, severity: { enum: ['critical', 'important', 'minor'] }, issue: { type: 'string' } } } },
     sequence: { type: 'array', items: { type: 'string' } } } }
@@ -126,17 +126,17 @@ const winner = proposals.find(p => p.id === decision.winnerId) || proposals[0]
 
 phase('Threats')
 const threats = await agent(
-  `${common}Mode: audit (read-only). Threat-model the winning design ${winner.id} (${winner.artifact}, decision ${decision.artifact}) against the current state ${currentC4}. Load <plugin root>/skills/stride-threat-model/SKILL.md and threat-mitigation-mapping/SKILL.md; verify entry points with roslyn-query.py <solution> get_endpoint_map and get_di_registrations for the projects touched. Write ${workDir}/04-threat-model.md and return the JSON (ids T1…, severity critical/important/minor). Return JSON { artifact, threats: [{ id: "T1", category: <STRIDE category>, component, severity: critical|important|minor, mitigation }] }.`,
+  `${common}Mode: audit (no source edits; write only the report file under the work directory). Threat-model the winning design ${winner.id} (${winner.artifact}, decision ${decision.artifact}) against the current state ${currentC4}. Load <plugin root>/skills/stride-threat-model/SKILL.md and threat-mitigation-mapping/SKILL.md; verify entry points with roslyn-query.py <solution> get_endpoint_map and get_di_registrations for the projects touched. Write ${workDir}/04-threat-model.md and return the JSON (ids T1…, severity critical/important/minor). Return JSON { artifact, threats: [{ id: "T1", category: <STRIDE category>, component, severity: critical|important|minor, mitigation }] }.`,
   { agentType: AGENT.security, schema: THREATS, label: 'threats' })
 
 phase('Data')
 const data = await agent(
-  `${common}Review the data model and migration implications of ${winner.id} (${winner.artifact}, decisions ${decision.artifact}) against the current state ${currentC4}. Deploy-window matrix, backfills, indexes on hot tables, rollback. Use the postgres-mcp / mssql-mcp tools when their environment is set; otherwise say "schema source: repository". Write ${workDir}/05-data-migration.md and return the JSON (ids M1…). Return JSON { artifact, status: APPROVED|CHANGES_REQUESTED|BLOCKED, findings: [{ id: "M1", severity, issue }], sequence: [<expand/migrate/contract steps>] }.`,
+  `${common}Review the data model and migration implications of ${winner.id} (${winner.artifact}, decisions ${decision.artifact}) against the current state ${currentC4}. Deploy-window matrix, backfills, indexes on hot tables, rollback. Use the postgres-mcp / mssql-mcp tools when their environment is set; otherwise say "schema source: repository". Return the JSON (ids M1…). Return JSON { status: APPROVED|CHANGES_REQUESTED|BLOCKED, findings: [{ id: "M1", severity, issue }], sequence: [<expand/migrate/contract steps>] }.`,
   { agentType: AGENT.migration, schema: DATA, label: 'data' })
 
 phase('Critic')
 const critic = await agent(
-  `${common}Completeness critic. Drivers: ${drivers.artifact}. Decision: ${decision.artifact}. Threats: ${threats ? threats.artifact : 'none'}. Data: ${data ? data.artifact : 'none'}. For every driver, find where the winning design answers it; list the drivers with no answer or a hand-wave. Write ${workDir}/06-completeness.md and return the JSON.`,
+  `${common}Completeness critic. Drivers: ${drivers.artifact}. Decision: ${decision.artifact}. Threats: ${threats ? threats.artifact : 'none'}. Data review (inline JSON): ${data ? JSON.stringify(data) : 'none'}. For every driver, find where the winning design answers it; list the drivers with no answer or a hand-wave. Write ${workDir}/06-completeness.md and return the JSON.`,
   { schema: CRITIC, label: 'critic', effort: 'low' })
 const unanswered = critic ? critic.unanswered : []
 log(`critic: ${unanswered.length} unanswered driver(s)`)
@@ -153,7 +153,7 @@ const adrs = await agent(
   `${common}Approved design: ${approved.id} (${approved.artifact}); decision table: ${JSON.stringify(decision.decisionTable)}. Read <plugin root>/skills/architecture-design/references/decision-recorder.md, adr-madr.md and adr-process.md. Write one MADR-format ADR per decision-table row into ${adrDir} (create it if missing) named NNNN-<slug>.md continuing the highest existing number there; status Proposed; include the reopen trigger. Return the JSON with the paths.`,
   { schema: ADRS, label: 'adrs' })
 const spec = await agent(
-  `${common}Assemble the design spec for ${approved.id}. Inputs: ${approved.artifact}, ${decision.artifact}, ${threats ? threats.artifact : 'no threat model'}, ${data ? data.artifact : 'no data review'}, ${critic ? critic.artifact : ''}, ADRs: ${adrs ? adrs.paths.join(', ') : 'none'}. Read <plugin root>/skills/architecture-design/references/migration-planner.md and diagram-builder.md, and the "Spec format" section of <plugin root>/skills/architecture-design/SKILL.md. Write ${specsDir}/<today>-${slug}-design.md (create the directory if missing; take today's date from \`date +%F\`). Then self-review it for placeholders, contradictions and unanswered drivers (${JSON.stringify(unanswered)}) and fix inline. Return the JSON with the path and a one-paragraph self-review.`,
+  `${common}Assemble the design spec for ${approved.id}. Inputs: ${approved.artifact}, ${decision.artifact}, ${threats ? threats.artifact : 'no threat model'}, data review (inline JSON): ${data ? JSON.stringify(data) : 'none'}, ${critic ? critic.artifact : ''}, ADRs: ${adrs ? adrs.paths.join(', ') : 'none'}. Read <plugin root>/skills/architecture-design/references/migration-planner.md and diagram-builder.md, and the "Spec format" section of <plugin root>/skills/architecture-design/SKILL.md. Write ${specsDir}/<today>-${slug}-design.md (create the directory if missing; take today's date from \`date +%F\`). Then self-review it for placeholders, contradictions and unanswered drivers (${JSON.stringify(unanswered)}) and fix inline. Return the JSON with the path and a one-paragraph self-review.`,
   { schema: SPEC, label: 'spec' })
 log(`architecture-design recorded: ${adrs ? adrs.paths.length : 0} ADR(s), spec ${spec ? spec.path : 'missing'}`)
 return { status: spec ? 'recorded' : 'blocked', workDir, drivers, proposals, decision, threats, data, unanswered, adrPaths: adrs ? adrs.paths : [], specPath: spec ? spec.path : '' }

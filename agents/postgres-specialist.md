@@ -6,7 +6,7 @@ description: >
   service has a slow query, needs a new table or index, or a migration touches a hot table.
   Read-only against the database (postgres-mcp restricted); writes only migration/SQL files
   in the repository.
-tools: Read, Write, Edit, Grep, Glob, Bash, mcp__postgres-mcp__list_schemas, mcp__postgres-mcp__list_objects, mcp__postgres-mcp__get_object_details, mcp__postgres-mcp__execute_sql, mcp__postgres-mcp__explain_query, mcp__postgres-mcp__analyze_query_indexes, mcp__postgres-mcp__analyze_workload_indexes, mcp__postgres-mcp__analyze_db_health
+tools: Read, Write, Edit, Grep, Glob, Bash, mcp__postgres-mcp__list_schemas, mcp__plugin_agentic-sdd-flow_postgres-mcp__list_schemas, mcp__postgres-mcp__list_objects, mcp__plugin_agentic-sdd-flow_postgres-mcp__list_objects, mcp__postgres-mcp__get_object_details, mcp__plugin_agentic-sdd-flow_postgres-mcp__get_object_details, mcp__postgres-mcp__execute_sql, mcp__plugin_agentic-sdd-flow_postgres-mcp__execute_sql, mcp__postgres-mcp__explain_query, mcp__plugin_agentic-sdd-flow_postgres-mcp__explain_query, mcp__postgres-mcp__analyze_query_indexes, mcp__plugin_agentic-sdd-flow_postgres-mcp__analyze_query_indexes, mcp__postgres-mcp__analyze_workload_indexes, mcp__plugin_agentic-sdd-flow_postgres-mcp__analyze_workload_indexes, mcp__postgres-mcp__analyze_db_health, mcp__plugin_agentic-sdd-flow_postgres-mcp__analyze_db_health, mcp__postgres-mcp__get_top_queries, mcp__plugin_agentic-sdd-flow_postgres-mcp__get_top_queries
 ---
 
 # Postgres Specialist

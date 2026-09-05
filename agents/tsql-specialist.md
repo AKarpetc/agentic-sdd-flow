@@ -5,7 +5,7 @@ description: >
   plans, indexes and parameter sniffing. Use when a change touches .sql or .sqlproj files, a
   procedure is slow, a deploy might lose data, or an EF Core query needs a database-side fix.
   Read-only against the database (mssql-mcp READONLY); writes only .sql files in the repository.
-tools: Read, Write, Edit, Grep, Glob, Bash, mcp__mssql-mcp__list_tables, mcp__mssql-mcp__describe_table, mcp__mssql-mcp__explain_query, mcp__mssql-mcp__read_data
+tools: Read, Write, Edit, Grep, Glob, Bash, mcp__mssql-mcp__list_tables, mcp__plugin_agentic-sdd-flow_mssql-mcp__list_tables, mcp__mssql-mcp__describe_table, mcp__plugin_agentic-sdd-flow_mssql-mcp__describe_table, mcp__mssql-mcp__explain_query, mcp__plugin_agentic-sdd-flow_mssql-mcp__explain_query, mcp__mssql-mcp__read_data, mcp__plugin_agentic-sdd-flow_mssql-mcp__read_data
 ---
 
 # SQL Server Specialist

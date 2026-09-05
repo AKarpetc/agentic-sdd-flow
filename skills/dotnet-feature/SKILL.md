@@ -50,7 +50,9 @@ Invoke `superpowers:brainstorming` with the description. Keep its approval gate.
    which proposal to approve (or what to change). **Stop until the user answers.**
 4. Second run: the same call plus `approvedProposalId` and `resumeFromRunId` from the first run.
    It writes the ADRs and the spec; then continue with brainstorming's steps 7–8 (spec self-review,
-   user reviews the spec) on `specPath`, and go to step 3 with that spec.
+   user reviews the spec) on `specPath`, and go to step 3 with that spec. Always pass
+   `resumeFromRunId`; if the second run's `decision.winnerId` differs from the id you approved,
+   stop and show both — do not write ADRs from a different decision table.
 
 ## 3. Plan — `superpowers:writing-plans`
 

@@ -5,7 +5,7 @@ description: >
   deploy-window safety: old code on new schema, new code on old data, backfills, hot-table
   indexes, verification SQL and rollback. Read-only. Use before merging any migration that
   touches existing tables, and from the architecture-design workflow's data stage.
-tools: Read, Grep, Glob, Bash, mcp__cwm-roslyn-navigator__find_references, mcp__cwm-roslyn-navigator__find_symbol, mcp__cwm-roslyn-navigator__get_symbol_source, mcp__postgres-mcp__get_object_details, mcp__postgres-mcp__explain_query, mcp__mssql-mcp__describe_table, mcp__mssql-mcp__explain_query
+tools: Read, Grep, Glob, Bash, mcp__cwm-roslyn-navigator__find_references, mcp__cwm-roslyn-navigator__find_symbol, mcp__cwm-roslyn-navigator__get_symbol_source, mcp__postgres-mcp__get_object_details, mcp__plugin_agentic-sdd-flow_postgres-mcp__get_object_details, mcp__postgres-mcp__explain_query, mcp__plugin_agentic-sdd-flow_postgres-mcp__explain_query, mcp__mssql-mcp__describe_table, mcp__plugin_agentic-sdd-flow_mssql-mcp__describe_table, mcp__mssql-mcp__explain_query, mcp__plugin_agentic-sdd-flow_mssql-mcp__explain_query
 disallowedTools: Write, Edit, MultiEdit, NotebookEdit
 ---
 
@@ -13,7 +13,7 @@ disallowedTools: Write, Edit, MultiEdit, NotebookEdit
 
 Three layers, in order (structure adapted from EveryInc's `data-migration-reviewer`, MIT; rewritten for EF Core and SSDT):
 
-1. **Schema artefact risk** — is the migration what the model says? For EF Core: `dotnet ef migrations has-pending-model-changes` (EF 8+) or compare the snapshot diff; a migration whose `Up()` does not match the model diff is `critical`. For SSDT: apply the `ssdt-reviewer` skill (refactor log, `BlockOnPossibleDataLoss`, post-deploy order).
+1. **Schema artefact risk** — is the migration what the model says? For EF Core: `dotnet ef migrations has-pending-model-changes` (EF 8+) or compare the snapshot diff; a migration whose `Up()` does not match the model diff is `critical`. For SSDT: apply the `ssdt-reviewer` skill (refactor log, `BlockOnPossibleDataLoss`, post-deploy order). For Postgres DDL apply the `postgres-migration` skill's lock reference.
 2. **Migration correctness** — the deploy window.
 3. **Verification and rollback** — SQL that proves it, and a credible way back.
 

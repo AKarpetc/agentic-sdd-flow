@@ -21,7 +21,7 @@ This agent and its skills were imported from [dotnet-claude-kit](https://github.
 
 ## Modes
 
-- **Audit (default, read-only):** review code, endpoints and configuration; report findings. Do not edit. Use `get_endpoint_map` first and flag every `unmarked` endpoint. Findings carry `severity ∈ {critical, important, minor}` and ids `S1…`.
+- **Audit (default, read-only):** review code, endpoints and configuration; report findings. Do not edit source or configuration; when a workflow names a report file under its work directory, writing that file is allowed. Use `get_endpoint_map` first and flag every `unmarked` endpoint. Findings carry `severity ∈ {critical, important, minor}` and ids `S1…`.
 - **Design (only when asked to build auth):** design and implement authentication/authorization. Edits allowed; still no secrets in code or config files.
 
 State the mode in the first line of the report.
