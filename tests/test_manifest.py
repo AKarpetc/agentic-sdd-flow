@@ -198,6 +198,32 @@ class Rules(unittest.TestCase):
         self.assertEqual(in_readme, in_code)
 
 
+class Sketches(unittest.TestCase):
+    """Design artifacts are drawn as Mermaid: the convention file exists and every design stage is wired to it."""
+
+    REFERENCE = os.path.join(ROOT, "skills", "architecture-design", "references", "sketch-conventions.md")
+
+    def test_reference_exists_and_forbids_experimental_c4(self):
+        text = read(self.REFERENCE)
+        self.assertIn("```mermaid", text)
+        self.assertIn("C4Context", text)
+        for kind in ("flowchart", "sequenceDiagram", "erDiagram", "stateDiagram-v2"):
+            self.assertIn(kind, text)
+
+    def test_design_stages_reference_the_convention(self):
+        wired = [os.path.join(ROOT, "agents", "design-%s.md" % lens) for lens in ("simplicity", "scalability", "boundaries", "judge")]
+        wired += [os.path.join(ROOT, "workflows", "architecture-design.js"),
+                  os.path.join(ROOT, "skills", "architecture-design", "SKILL.md")]
+        for path in wired:
+            with self.subTest(file=os.path.relpath(path, ROOT)):
+                self.assertIn("sketch-conventions.md", read(path))
+
+    def test_workflow_asks_for_mermaid_at_context_proposal_and_spec(self):
+        text = read(os.path.join(ROOT, "workflows", "architecture-design.js"))
+        self.assertGreaterEqual(text.count("sketch-conventions.md"), 4)
+        self.assertIn("mermaid fences", text)
+
+
 class Workflows(unittest.TestCase):
     workflows = sorted(glob.glob(os.path.join(ROOT, "workflows", "*.js")))
 

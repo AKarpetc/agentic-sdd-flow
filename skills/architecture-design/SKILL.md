@@ -15,16 +15,20 @@ Stage reference → which file under `references/` an agent reads (resolve under
 | Stage | Agent | Reads | Writes (under the work directory) |
 |---|---|---|---|
 | 0 Drivers | default workflow agent | `baseline-builder.md`, `nfr-capture.md` | `00-drivers.md` — driver register with ids `DR1…` |
-| 1 Context | default agent per project, then a merge agent | `current-architecture.md`, `c4-model.md` | `01-context-<project>.md`, merged `01-current-c4.md` |
-| 2 Proposals | `design-simplicity`, `design-scalability`, `design-boundaries` | `proposal-builder.md` | `02-proposal-<lens>.md` |
-| 3 Judge | `design-judge` × N, one refuter, one synthesiser | `review-rubric.md`, `scenario-compare.md` | `03-decision.md` — scores, winner, runner-up, decision table |
+| 1 Context | default agent per project, then a merge agent | `current-architecture.md`, `c4-model.md`, `sketch-conventions.md` | `01-context-<project>.md`, merged `01-current-c4.md` |
+| 2 Proposals | `design-simplicity`, `design-scalability`, `design-boundaries` | `proposal-builder.md`, `sketch-conventions.md` | `02-proposal-<lens>.md` |
+| 3 Judge | `design-judge` × N, one refuter, one synthesiser | `review-rubric.md`, `scenario-compare.md`, `sketch-conventions.md` | `03-decision.md` — scores, winner, runner-up, decision table |
 | 4 Threats | `security-auditor` (audit mode) | `stride-threat-model`, `threat-mitigation-mapping` skills | `04-threat-model.md` |
 | 5 Data | `migration-reviewer` | `postgres-migration`, `ssdt-reviewer` skills | — (returns JSON; the spec stage embeds it) |
 | — Critic | default agent | all of the above | `06-completeness.md` — drivers without an answer |
 | 6 ADR (after approval) | default agent | `decision-recorder.md`, `adr-madr.md`, `adr-process.md` | `<adrDir>/NNNN-<slug>.md` per decision |
-| 7 Spec (after approval) | default agent | `migration-planner.md`, `diagram-builder.md` | `<specsDir>/<date>-<slug>-design.md` |
+| 7 Spec (after approval) | default agent | `migration-planner.md`, `diagram-builder.md`, `sketch-conventions.md` | `<specsDir>/<date>-<slug>-design.md` |
 
 `references/c4-model.md` and `references/adr-process.md` were vendored as single files — use them for their templates and top-level guidance only; ignore their pointers to companion files (`mode-*.md`, `supporting-diagrams.md`, `shared-patterns.md`, …) and to tooling this plugin does not ship (`qmd`, `cgg`, `/sdd:*`, `TeamCreate`).
+
+## Sketches
+
+Design is drawn, not only described: every artifact in the table embeds its views as ```mermaid fences following `references/sketch-conventions.md` (flowchart with subgraphs for context/container/component, sequenceDiagram for the critical flow and its failure path, erDiagram for data, `:::target` marks for what changes). Sketches live with the other artifacts under the work directory (`<plansDir>/architecture/<slug>/`), never in a project's tracked tree, and the same text can be imported into FigJam later. No ASCII art, no image files, no Mermaid C4 syntax.
 
 ## Shared shapes
 
@@ -36,4 +40,4 @@ Stage reference → which file under `references/` an agent reads (resolve under
 
 ## Spec format (stage 7)
 
-The spec file must be what `superpowers:writing-plans` expects as input: a title, `## Goal`, `## Context` (current C4 summary), `## Design` (the winner: components, contracts, data model, failure behaviour), `## Decisions` (table: id, choice, ADR path), `## Threats and mitigations`, `## Data migration` (sequence and rollback), `## Out of scope`, `## Open questions` (empty or the list). No placeholders.
+The spec file must be what `superpowers:writing-plans` expects as input: a title, `## Goal`, `## Context` (current C4 summary), `## Design` (the winner: components, contracts, data model, failure behaviour, with the approved proposal's mermaid views verbatim), `## Decisions` (table: id, choice, ADR path), `## Threats and mitigations`, `## Data migration` (sequence and rollback), `## Out of scope`, `## Open questions` (empty or the list). No placeholders.

@@ -33,7 +33,7 @@ Design (approval gate) → plan → `dotnet-sdd` workflow → branch, never push
 
 Direct pieces: `/agentic-sdd-flow:dotnet-code-review`, the `tests-writer` agent,
 `Workflow({ name: 'agentic-sdd-flow:dotnet-sdd', args: { project, projectDir, plan, taskKey } })`.
-On the architectural path the entry point can run `architecture-design` first (drivers → current C4 → three lens proposals → judge panel → threat model → data review; ADRs + spec after you approve). Direct call: `Workflow({ name: 'agentic-sdd-flow:architecture-design', args: { brief, projects, workDir, adrDir, specsDir, slug } })`.
+On the architectural path the entry point can run `architecture-design` first (drivers → current C4 → three lens proposals → judge panel → threat model → data review; ADRs + spec after you approve). Every design artifact carries its diagrams as Mermaid fences (`skills/architecture-design/references/sketch-conventions.md`), so a sketch is reviewable text in the merge request and importable into FigJam later. Direct call: `Workflow({ name: 'agentic-sdd-flow:architecture-design', args: { brief, projects, workDir, adrDir, specsDir, slug } })`.
 
 Plugin agents and workflows register at session start: restart Claude Code after installing or
 updating the plugin.

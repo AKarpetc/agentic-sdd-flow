@@ -83,16 +83,16 @@ log(`${drivers.drivers.length} drivers, ${drivers.openQuestions.length} open que
 
 phase('Context')
 const contextResults = await parallel(projects.map(p => () => agent(
-  `${common}Document the current-state architecture of project ${p.name} only. Read <plugin root>/skills/architecture-design/references/current-architecture.md and c4-model.md. Use Roslyn: roslyn-query.py ${p.solution} get_project_graph (an empty graph is a mis-bind — retry with the explicit path), get_endpoint_map, get_di_registrations, get_nuget_packages; grep for message contracts, cache keys, gRPC services, connection strings (names only, never values). Write ${workDir}/01-context-${p.name}.md as a C4 container/component description with an evidence table, and return the JSON.`,
+  `${common}Document the current-state architecture of project ${p.name} only. Read <plugin root>/skills/architecture-design/references/current-architecture.md, c4-model.md and sketch-conventions.md. Use Roslyn: roslyn-query.py ${p.solution} get_project_graph (an empty graph is a mis-bind — retry with the explicit path), get_endpoint_map, get_di_registrations, get_nuget_packages; grep for message contracts, cache keys, gRPC services, connection strings (names only, never values). Write ${workDir}/01-context-${p.name}.md as a C4 container/component description with an evidence table and the container view (plus a component view if the brief touches this project) as mermaid fences per sketch-conventions.md, and return the JSON.`,
   { schema: ARTIFACT, label: `context:${p.name}`, phase: 'Context' })))
 const contexts = contextResults.filter(Boolean)
 const merged = await agent(
-  `${common}Merge these per-project context documents into one current-state C4 (context + containers, and components for the projects the brief touches): ${contexts.filter(Boolean).map(c => c.artifact).join(', ')}. Keep the evidence tables. Write ${workDir}/01-current-c4.md and return the JSON.`,
+  `${common}Merge these per-project context documents into one current-state C4 (context + containers, and components for the projects the brief touches): ${contexts.filter(Boolean).map(c => c.artifact).join(', ')}. Keep the evidence tables; draw one context view and one merged container view as mermaid fences per <plugin root>/skills/architecture-design/references/sketch-conventions.md, reusing the per-project element ids. Write ${workDir}/01-current-c4.md and return the JSON.`,
   { schema: ARTIFACT, label: 'context:merge' })
 const currentC4 = merged ? merged.artifact : `${workDir}/01-current-c4.md`
 
 phase('Proposals')
-const lensPrompt = `${common}Drivers: ${drivers.artifact}. Current state: ${currentC4}. Produce your lens proposal per your agent instructions and return the JSON.`
+const lensPrompt = `${common}Drivers: ${drivers.artifact}. Current state: ${currentC4}. Produce your lens proposal per your agent instructions, sketches included (sketch-conventions.md), and return the JSON.`
 const proposalResults = await parallel([
   () => agent(lensPrompt, { agentType: AGENT.simplicity, schema: PROPOSAL, label: 'lens:simplicity' }),
   () => agent(lensPrompt, { agentType: AGENT.scalability, schema: PROPOSAL, label: 'lens:scalability' }),
@@ -153,7 +153,7 @@ const adrs = await agent(
   `${common}Approved design: ${approved.id} (${approved.artifact}); decision table: ${JSON.stringify(decision.decisionTable)}. Read <plugin root>/skills/architecture-design/references/decision-recorder.md, adr-madr.md and adr-process.md. Write one MADR-format ADR per decision-table row into ${adrDir} (create it if missing) named NNNN-<slug>.md continuing the highest existing number there; status Proposed; include the reopen trigger. Return the JSON with the paths.`,
   { schema: ADRS, label: 'adrs' })
 const spec = await agent(
-  `${common}Assemble the design spec for ${approved.id}. Inputs: ${approved.artifact}, ${decision.artifact}, ${threats ? threats.artifact : 'no threat model'}, data review (inline JSON): ${data ? JSON.stringify(data) : 'none'}, ${critic ? critic.artifact : ''}, ADRs: ${adrs ? adrs.paths.join(', ') : 'none'}. Read <plugin root>/skills/architecture-design/references/migration-planner.md and diagram-builder.md, and the "Spec format" section of <plugin root>/skills/architecture-design/SKILL.md. Write ${specsDir}/<today>-${slug}-design.md (create the directory if missing; take today's date from \`date +%F\`). Then self-review it for placeholders, contradictions and unanswered drivers (${JSON.stringify(unanswered)}) and fix inline. Return the JSON with the path and a one-paragraph self-review.`,
+  `${common}Assemble the design spec for ${approved.id}. Inputs: ${approved.artifact}, ${decision.artifact}, ${threats ? threats.artifact : 'no threat model'}, data review (inline JSON): ${data ? JSON.stringify(data) : 'none'}, ${critic ? critic.artifact : ''}, ADRs: ${adrs ? adrs.paths.join(', ') : 'none'}. Read <plugin root>/skills/architecture-design/references/migration-planner.md, diagram-builder.md and sketch-conventions.md, and the "Spec format" section of <plugin root>/skills/architecture-design/SKILL.md. Write ${specsDir}/<today>-${slug}-design.md (create the directory if missing; take today's date from \`date +%F\`). Then self-review it for placeholders, contradictions and unanswered drivers (${JSON.stringify(unanswered)}) and fix inline. Return the JSON with the path and a one-paragraph self-review.`,
   { schema: SPEC, label: 'spec' })
 log(`architecture-design recorded: ${adrs ? adrs.paths.length : 0} ADR(s), spec ${spec ? spec.path : 'missing'}`)
 return { status: spec ? 'recorded' : 'blocked', workDir, drivers, proposals, decision, threats, data, unanswered, adrPaths: adrs ? adrs.paths : [], specPath: spec ? spec.path : '' }

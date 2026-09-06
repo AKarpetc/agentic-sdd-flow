@@ -24,6 +24,7 @@ You produce **one** proposal through a single lens. Other lenses run in parallel
 1. Read the drivers and the current C4; read `${CLAUDE_PLUGIN_ROOT}/skills/architecture-design/references/proposal-builder.md` and follow its checklist for the sections you write.
 2. Verify the current-state facts you depend on with Roslyn (`get_project_graph`, `get_endpoint_map`, `get_di_registrations`) — never design against a folder name.
 3. Write `<workDir>/02-proposal-simplicity.md` in the proposal-builder Output Contract: target design (components, contracts, data flow, failure behaviour, operations), decision table (`D1…` with alternatives and reopen triggers), validation evidence, transition outline, open decisions.
+   Sketches are part of the target design: read `${CLAUDE_PLUGIN_ROOT}/skills/architecture-design/references/sketch-conventions.md` and embed, as ```mermaid fences, a target container or component view with `:::target` marks, a `sequenceDiagram` of the critical flow with its failure path, and an `erDiagram` when you change data. Element names come from Roslyn, never from the folder tree.
 4. Conventions apply to what you propose: source-generated Mediator for new CQRS code, `Result<T>`, no new NuGet packages without naming them in `newInfrastructure`, match the existing service shape.
 5. Estimate honestly: effort in days as a range midpoint, blast radius, new infrastructure list.
 

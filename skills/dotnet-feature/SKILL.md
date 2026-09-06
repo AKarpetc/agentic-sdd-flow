@@ -46,7 +46,8 @@ Invoke `superpowers:brainstorming` with the description. Keep its approval gate.
    If the name is unknown, run it via `scriptPath: '<plugin root>/workflows/architecture-design.js'`.
 3. Present to the user, verbatim from the result: the winner and runner-up (`decision.winnerId`,
    `decision.runnerUpId`, their summaries and estimates), the decision table, `decision.openDecisions`,
-   `threats` with `critical`/`important` severity, `data.findings`, and `unanswered` drivers. Ask
+   `threats` with `critical`/`important` severity, `data.findings`, and `unanswered` drivers, and the
+   paths of the proposal files whose mermaid sketches show each design. Ask
    which proposal to approve (or what to change). **Stop until the user answers.**
 4. Second run: the same call plus `approvedProposalId` and `resumeFromRunId` from the first run.
    It writes the ADRs and the spec; then continue with brainstorming's steps 7–8 (spec self-review,
