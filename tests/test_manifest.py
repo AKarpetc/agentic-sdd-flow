@@ -224,6 +224,63 @@ class Sketches(unittest.TestCase):
         self.assertIn("mermaid fences", text)
 
 
+class WorkDistribution(unittest.TestCase):
+    """Which agent each workflow phase dispatches to — the plugin's division of labour, pinned."""
+
+    EXPECTED = {
+        "dotnet-sdd.js": {
+            "Analyze": set(), "Implement": {"implementer"}, "Tests": {"tests"}, "Review": {"reviewer"},
+            "Verify": {"verifier"}, "Fix": {"implementer"}, "Final review": {"reviewer"},
+        },
+        "architecture-design.js": {
+            "Drivers": set(), "Context": set(), "Proposals": {"simplicity", "scalability", "boundaries"},
+            "Judge": {"judge"}, "Threats": {"security"}, "Data": {"migration"}, "Critic": set(), "Record": set(),
+        },
+    }
+    PARALLEL = {"dotnet-sdd.js": {"Verify"}, "architecture-design.js": {"Context", "Proposals", "Judge"}}
+
+    @staticmethod
+    def segments(text):
+        """Maps each phase label to the AGENT keys dispatched inside that phase's code."""
+        found = {}
+        parts = re.split(r"phase\('([^']+)'\)", text)
+        for label, body in zip(parts[1::2], parts[2::2]):
+            found.setdefault(label, {"agents": set(), "parallel": False})
+            found[label]["agents"] |= set(re.findall(r"agentType: AGENT\.(\w+)", body))
+            found[label]["parallel"] |= "parallel(" in body
+        return found
+
+    def test_each_phase_goes_to_its_agent(self):
+        for name, expected in self.EXPECTED.items():
+            found = self.segments(read(os.path.join(ROOT, "workflows", name)))
+            with self.subTest(workflow=name):
+                self.assertEqual(set(found), set(expected), "phases declared vs expected")
+                for label, agents in expected.items():
+                    self.assertEqual(found[label]["agents"], agents, "%s › %s" % (name, label))
+
+    def test_fan_out_phases_run_in_parallel(self):
+        for name, phases in self.PARALLEL.items():
+            found = self.segments(read(os.path.join(ROOT, "workflows", name)))
+            for label in phases:
+                with self.subTest(workflow=name, phase=label):
+                    self.assertTrue(found[label]["parallel"])
+
+    def test_reviewer_never_implements_and_implementer_never_reviews(self):
+        text = read(os.path.join(ROOT, "workflows", "dotnet-sdd.js"))
+        found = self.segments(text)
+        self.assertNotIn("reviewer", found["Implement"]["agents"] | found["Fix"]["agents"])
+        self.assertNotIn("implementer", found["Review"]["agents"] | found["Final review"]["agents"])
+        self.assertIn("agentType: AGENT.verifier", text)
+
+    def test_meta_phases_match_the_dispatched_phases(self):
+        for name in self.EXPECTED:
+            text = read(os.path.join(ROOT, "workflows", name))
+            meta = text.split("\n}\n", 1)[0]
+            declared = re.findall(r"title: '([^']+)'", meta)
+            with self.subTest(workflow=name):
+                self.assertEqual(set(declared), set(self.EXPECTED[name]))
+
+
 class Workflows(unittest.TestCase):
     workflows = sorted(glob.glob(os.path.join(ROOT, "workflows", "*.js")))
 

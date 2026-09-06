@@ -121,6 +121,23 @@ pin / launcher scripts against a fixture repository, and a structural lint: mani
 MCP entries, agent and skill frontmatter, navigator tool names, hand-off keys, README check ids,
 relative links and the workflow scripts. `.github/workflows/tests.yml` runs the same on push.
 
+Work distribution is pinned twice. Statically, `tests/test_manifest.py` asserts which agent each
+workflow phase dispatches to (implementer never reviews, reviewer never implements, fan-out phases
+run in parallel). Behaviourally, `evals/routing/` runs nine headless `claude -p` sessions inside a
+copy of `evals/fixtures/orders-service` and checks the top-level dispatch: review → the
+`dotnet-code-review` skill or `code-reviewer`, tests → `tests-writer`, a ticket → `dotnet-feature`,
+a broken build → `build-error-resolver`, a slow query → the EF Core specialist, a cross-service
+design → `architecture-design`, a migration → `migration-reviewer`, a Python edit → no plugin agent
+at all, and a primary-constructor write → rejected by the gate. Each session costs about a dollar
+and the fixture never needs the .NET SDK.
+
+```
+python3 evals/routing/run.py [--case NAME] [--workers 3] [--out DIR]
+```
+
+`claude plugin eval` is the intended home for these cases once it is enabled for the account; the
+runner is a stand-in with the same shape (prompt, expected dispatch, forbidden dispatch).
+
 ## Runtime notes
 
 - Local-path marketplace install: OK (`claude plugin marketplace add <path>` + `claude plugin install agentic-sdd-flow@agentic-sdd-flow`).

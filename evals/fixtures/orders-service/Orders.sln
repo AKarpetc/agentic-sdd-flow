@@ -1,0 +1,7 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Orders.Api", "src\Orders.Api\Orders.Api.csproj", "{1B4C0F5E-4B4C-4E6E-9B2B-1E3F9A6C2D11}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Orders.Api.Tests", "tests\Orders.Api.Tests\Orders.Api.Tests.csproj", "{2C5D1A6F-5C5D-4F7F-8C3C-2F4A0B7D3E22}"
+EndProject
