@@ -55,14 +55,14 @@ Three refuted hypotheses, or ten minutes without new evidence, means you return
 
 ```json
 {
-  "rootCause": "OrderService.CanCancelAsync: `order.Status is OrderStatus.Placed or OrderStatus.Paid` binds as `(order.Status is Placed) or Paid` — the second operand is a non-null enum constant, always true (src/Orders.Api/Services/OrderService.cs:27)",
+  "rootCause": "InMemoryOrderRepository.ListByCustomerAsync filters on `order.Id == customerId` instead of `order.CustomerId`, so every customer total is computed over an empty list (src/Orders.Api/Repositories/InMemoryOrderRepository.cs:31)",
   "confidence": "high|medium|low",
-  "evidence": "Reproduced with the new test (fails: expected False, got True); Roslyn get_symbol_source shows the expression; git log shows the pattern arrived in 3f2a1c0",
-  "fixBrief": "Parenthesise the pattern: `order.Status is (OrderStatus.Placed or OrderStatus.Paid)`; no other call sites (find_callers: 1)",
-  "files": ["src/Orders.Api/Services/OrderService.cs"],
+  "evidence": "Reproduced with the new test (fails: expected 37.75, got 0); Roslyn get_symbol_source shows the predicate; find_callers shows TotalForCustomerAsync is the only consumer",
+  "fixBrief": "Filter on `order.CustomerId == customerId`; keep the ordering by Id; no other call sites change",
+  "files": ["src/Orders.Api/Repositories/InMemoryOrderRepository.cs"],
   "reproduction": "tests/Orders.Api.Tests/Services/OrderServiceRegressionTests.cs",
   "verification": "dotnet test tests/Orders.Api.Tests --filter OrderServiceRegressionTests",
-  "ruledOut": ["stale test data (H1): the repository stub returns Shipped, confirmed by the test log"]
+  "ruledOut": ["wrong seed data (H1): the seeded orders carry CustomerId 1, confirmed by reading the seed"]
 }
 ```
 

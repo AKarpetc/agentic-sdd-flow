@@ -5,3 +5,5 @@ __pycache__/
 *.pyc
 evals/fixtures/**/bin/
 evals/fixtures/**/obj/
+evals/benchmark/fixture/**/bin/
+evals/benchmark/fixture/**/obj/

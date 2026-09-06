@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""Turns benchmark outcome files into one Markdown comparison: per task, per arm, per stage.
+
+  python3 evals/benchmark/report.py <results-dir> [more dirs…] > report.md
+"""
+
+import glob
+import json
+import os
+import sys
+from collections import defaultdict
+
+FIXTURE_BLOCKING = 4  # convention violations already present in the untouched fixture (ReportService)
+
+
+def load(dirs):
+    rows = []
+    for d in dirs:
+        for path in sorted(glob.glob(os.path.join(d, "*.json"))):
+            with open(path, encoding="utf-8") as handle:
+                data = json.load(handle)
+            if isinstance(data, dict) and "task" in data and "arm" in data:
+                rows.append(data)
+    return rows
+
+
+def money(v):
+    return "$%.2f" % v if isinstance(v, (int, float)) else "–"
+
+
+def minutes(seconds):
+    return "%.1f min" % (seconds / 60) if isinstance(seconds, (int, float)) else "–"
+
+
+def tokens(m):
+    t = m.get("tokens") or {}
+    return "%s in / %s out / %s cache" % (fmt(t.get("input")), fmt(t.get("output")), fmt((t.get("cacheRead") or 0) + (t.get("cacheCreation") or 0)))
+
+
+def fmt(n):
+    return "{:,}".format(n) if isinstance(n, (int, float)) else "–"
+
+
+def table(headers, rows):
+    out = ["| " + " | ".join(headers) + " |", "|" + "|".join("---" for _ in headers) + "|"]
+    out += ["| " + " | ".join(str(c) for c in row) + " |" for row in rows]
+    return "\n".join(out)
+
+
+def outcome_row(r):
+    m, a = r["metrics"], r.get("acceptance", {})
+    acc = a.get("acceptance", {})
+    conv = a.get("conventions", {})
+    git = a.get("git", {})
+    tests = a.get("tests", {})
+    agents = m.get("pulse") or m.get("agents") or []
+    return [
+        r["label"],
+        (m.get("reportedStatus") or m.get("subtype") or "–") + (" ⏱timeout" if r["session"].get("timedOut") else ""),
+        minutes(r["session"].get("wallSeconds")), money(m.get("costUsd")), tokens(m), m.get("turns") or "–",
+        len(r.get("pulse") or []) or sum(1 for d in m.get("dispatches", []) if d["tool"] == "Agent"),
+        sum((m.get("topLevelTools") or {}).values()) + sum((m.get("nestedTools") or {}).values()),
+        "✅" if a.get("build", {}).get("ok") else "❌",
+        "%s/%s" % (tests.get("passed", "–"), tests.get("total", "–")),
+        "%s/%s" % (acc.get("passed", "–"), acc.get("total", "–")),
+        "✅" if a.get("plantedBugFixed") else "❌",
+        "%+d" % (conv.get("blocking", FIXTURE_BLOCKING) - FIXTURE_BLOCKING) if conv else "–",
+        "%s (%s ok)" % (git.get("commits", "–"), git.get("wellFormed", "–")),
+    ]
+
+
+def stage_rows(r):
+    rows = []
+    for d in r["metrics"].get("dispatches", []):
+        rows.append(["%.1f" % (d["t"] / 60), d["tool"], d["label"], d.get("description", "")])
+    return rows
+
+
+def agent_rows(r):
+    src = r.get("pulse") or r["metrics"].get("agents") or []
+    rows = sorted(src, key=lambda a: -a.get("seconds", 0))
+    return [[a.get("type"), "%.1f min" % (a.get("seconds", 0) / 60), a.get("tools", 0), a.get("description", a.get("status", ""))] for a in rows[:12]]
+
+
+def main():
+    rows = load(sys.argv[1:])
+    by_task = defaultdict(list)
+    for r in rows:
+        by_task[r["task"]].append(r)
+    out = ["# Benchmark: superpowers alone vs agentic-sdd-flow", ""]
+    headers = ["arm", "status", "wall", "cost", "tokens", "turns", "agents", "tool calls", "build", "own tests", "acceptance", "planted bug", "Δ violations", "commits"]
+    totals = defaultdict(lambda: {"cost": 0.0, "wall": 0.0, "acc": 0, "acc_total": 0, "bugs": 0, "n": 0})
+    for task in sorted(by_task):
+        out += ["## %s" % task, "", table(headers, [outcome_row(r) for r in sorted(by_task[task], key=lambda r: r["arm"])]), ""]
+        for r in sorted(by_task[task], key=lambda r: r["arm"]):
+            t = totals[r["arm"]]
+            t["cost"] += r["metrics"].get("costUsd") or 0
+            t["wall"] += r["session"].get("wallSeconds") or 0
+            acc = r.get("acceptance", {}).get("acceptance", {})
+            t["acc"] += acc.get("passed", 0) or 0
+            t["acc_total"] += acc.get("total", 0) or 0
+            t["bugs"] += 1 if r.get("acceptance", {}).get("plantedBugFixed") else 0
+            t["n"] += 1
+            out += ["### %s — stages (minute of dispatch)" % r["label"], "", table(["min", "tool", "target", "description"], stage_rows(r)) or "_no dispatches_", ""]
+            agents = agent_rows(r)
+            if agents:
+                out += ["Longest agents:", "", table(["agent", "time", "tool calls", "note"], agents), ""]
+            failed = [c for c in r.get("acceptance", {}).get("acceptance", {}).get("checks", []) if not c["ok"]]
+            if failed:
+                out += ["Failed acceptance checks:", ""] + ["- %s — %s" % (c["name"], c["detail"][:140]) for c in failed] + [""]
+    out += ["## Totals", "", table(["arm", "runs", "cost", "wall", "acceptance", "planted bugs fixed"],
+                                    [[arm, t["n"], money(t["cost"]), minutes(t["wall"]), "%d/%d" % (t["acc"], t["acc_total"]), "%d/%d" % (t["bugs"], t["n"])] for arm, t in sorted(totals.items())]), ""]
+    out += ["Δ violations = blocking convention violations in the final tree minus the %d the fixture already carries. Acceptance = hidden HTTP checks against `dotnet run`. Stage minutes are arrival times of top-level Skill/Agent/Workflow dispatches; agent times come from the plugin's pulse (plugin arm) or nested tool events (baseline)." % FIXTURE_BLOCKING]
+    print("\n".join(out))
+
+
+if __name__ == "__main__":
+    main()

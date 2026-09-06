@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+"""Objective checks on a finished benchmark workspace: build, the repository's own tests, hidden HTTP
+acceptance against the running API, convention violations in the final tree, and git hygiene.
+
+  python3 evals/benchmark/acceptance.py <task-id> <workspace> [--port 5177] > result.json
+"""
+
+import argparse
+import glob
+import json
+import os
+import re
+import socket
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+PLUGIN_ROOT = os.path.dirname(os.path.dirname(HERE))
+sys.path.insert(0, os.path.join(PLUGIN_ROOT, "scripts"))
+import importlib.util  # noqa: E402
+
+spec = importlib.util.spec_from_file_location("check_rules", os.path.join(PLUGIN_ROOT, "scripts", "check-rules.py"))
+check_rules = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(check_rules)
+
+ENV = dict(os.environ, DOTNET_CLI_TELEMETRY_OPTOUT="1", DOTNET_NOLOGO="1", ASPNETCORE_ENVIRONMENT="Development")
+
+
+def sh(args, cwd, timeout=600):
+    proc = subprocess.run(args, cwd=cwd, env=ENV, capture_output=True, text=True, timeout=timeout)
+    return proc.returncode, proc.stdout + proc.stderr
+
+
+def build(workspace):
+    code, out = sh(["dotnet", "build", "Orders.slnx", "-nologo", "-v", "q"], workspace)
+    errors = len(re.findall(r"error CS\d+", out))
+    return {"ok": code == 0, "errors": errors, "tail": out[-1200:]}
+
+
+def tests(workspace):
+    code, out = sh(["dotnet", "test", "Orders.slnx", "-nologo", "-v", "q", "--no-build"], workspace, timeout=900)
+    passed = sum(int(n) for n in re.findall(r"Passed!\s+-\s+Failed:\s+\d+,\s+Passed:\s+(\d+)", out))
+    failed = sum(int(n) for n in re.findall(r"Failed:\s+(\d+),\s+Passed:", out))
+    total = sum(int(n) for n in re.findall(r"Total:\s+(\d+)", out))
+    if total == 0:  # newer test SDK output
+        passed = sum(int(n) for n in re.findall(r"Passed:\s+(\d+)", out))
+        failed = sum(int(n) for n in re.findall(r"Failed:\s+(\d+)", out))
+        total = passed + failed
+    return {"ok": code == 0, "passed": passed, "failed": failed, "total": total, "tail": out[-800:]}
+
+
+def http(method, url, body=None):
+    request = urllib.request.Request(url, method=method, data=json.dumps(body).encode() if body is not None else None,
+                                     headers={"Content-Type": "application/json"} if body is not None else {})
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            raw = response.read().decode()
+            if not raw.strip():
+                return response.status, None
+            try:
+                return response.status, json.loads(raw)
+            except ValueError:
+                return response.status, raw
+    except urllib.error.HTTPError as error:
+        raw = error.read().decode()
+        try:
+            return error.code, json.loads(raw)
+        except ValueError:
+            return error.code, raw
+    except (urllib.error.URLError, socket.timeout, ConnectionError) as error:
+        return 0, str(error)
+
+
+def run_api(workspace, port):
+    proc = subprocess.Popen(["dotnet", "run", "--project", "src/Orders.Api", "--no-build", "--urls", f"http://127.0.0.1:{port}"],
+                            cwd=workspace, env=ENV, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    deadline = time.time() + 60
+    while time.time() < deadline:
+        if http("GET", f"http://127.0.0.1:{port}/")[0] != 0:
+            return proc
+        if proc.poll() is not None:
+            break
+        time.sleep(0.5)
+    proc.kill()
+    return None
+
+
+def near(a, b):
+    try:
+        return abs(float(a) - float(b)) < 0.001
+    except (TypeError, ValueError):
+        return False
+
+
+def acceptance_t1(base):
+    checks = []
+    for cid, total in ((1, 37.75), (2, 100.0), (3, 0), (99, 0)):
+        status, body = http("GET", f"{base}/api/customers/{cid}/orders/total")
+        ok = status == 200 and isinstance(body, dict) and near(body.get("total"), total) and str(body.get("customerId")) == str(cid)
+        checks.append({"name": f"total customer {cid} = {total}", "ok": ok, "detail": f"{status} {body}"})
+    return checks
+
+
+def acceptance_t2(base):
+    checks = []
+    for oid, expected in ((101, 204), (102, 204), (104, 409), (103, 409), (999, 404)):
+        status, body = http("POST", f"{base}/api/orders/{oid}/cancel")
+        ok = status == expected
+        if expected == 409:
+            ok = ok and isinstance(body, dict) and bool(body.get("title"))
+        checks.append({"name": f"cancel {oid} -> {expected}", "ok": ok, "detail": f"{status} {str(body)[:120]}"})
+    status, body = http("GET", f"{base}/api/orders/101")
+    checks.append({"name": "101 persisted as Cancelled", "ok": status == 200 and isinstance(body, dict) and str(body.get("status")).lower() == "cancelled", "detail": f"{status} {body}"})
+    status, body = http("GET", f"{base}/api/orders/104")
+    checks.append({"name": "104 still Shipped", "ok": status == 200 and isinstance(body, dict) and str(body.get("status")).lower() == "shipped", "detail": f"{status} {body}"})
+    status, body = http("GET", f"{base}/api/outbox")
+    ok = status == 200 and isinstance(body, list) and [str(e.get("orderId")) for e in body if isinstance(e, dict)] == ["101", "102"] \
+        and all(e.get("type") == "OrderCancelled" for e in body if isinstance(e, dict))
+    checks.append({"name": "outbox has OrderCancelled 101, 102", "ok": ok, "detail": f"{status} {str(body)[:160]}"})
+    return checks
+
+
+def acceptance_t3(base):
+    checks = []
+    def page(cid, p, s):
+        return http("GET", f"{base}/api/customers/{cid}/orders?page={p}&size={s}")
+    for cid, p, s, ids, total in ((1, 1, 2, [101, 102], 4), (1, 2, 2, [103, 104], 4), (1, 3, 2, [], 4), (2, 1, 10, [201, 202], 2), (99, 1, 5, [], 0)):
+        status, body = page(cid, p, s)
+        got = [int(i.get("id")) for i in body.get("items", [])] if isinstance(body, dict) and isinstance(body.get("items"), list) else None
+        ok = status == 200 and got == ids and isinstance(body, dict) and body.get("totalItems") == total and body.get("page") == p and body.get("size") == s
+        checks.append({"name": f"customer {cid} page {p} size {s} -> {ids} of {total}", "ok": ok, "detail": f"{status} {str(body)[:160]}"})
+    for p, s, param in ((0, 2, "page"), (1, 0, "size"), (1, 101, "size")):
+        status, body = page(1, p, s)
+        ok = status == 400 and isinstance(body, dict) and param in str(body.get("detail", "")).lower()
+        checks.append({"name": f"page={p} size={s} -> 400 naming {param}", "ok": ok, "detail": f"{status} {str(body)[:160]}"})
+    return checks
+
+
+ACCEPTANCE = {"T1": acceptance_t1, "T2": acceptance_t2, "T3": acceptance_t3}
+PLANTED = {"T1": "total customer 1 = 37.75", "T2": "cancel 102 -> 204", "T3": "customer 1 page 1 size 2 -> [101, 102] of 4"}
+
+
+def conventions(workspace):
+    per_rule, files = {}, 0
+    for path in glob.glob(os.path.join(workspace, "**", "*.cs"), recursive=True):
+        if re.search(r"[/\\](obj|bin|Migrations)[/\\]", path):
+            continue
+        files += 1
+        with open(path, encoding="utf-8-sig") as handle:
+            blocking, advisory = check_rules.inspect(path, handle.read())
+        for rule, _, _ in blocking:
+            per_rule[rule] = per_rule.get(rule, 0) + 1
+        for rule, _, _ in advisory:
+            per_rule["advisory:" + rule] = per_rule.get("advisory:" + rule, 0) + 1
+    blocking_total = sum(v for k, v in per_rule.items() if not k.startswith("advisory:"))
+    advisory_total = sum(v for k, v in per_rule.items() if k.startswith("advisory:"))
+    return {"files": files, "blocking": blocking_total, "advisory": advisory_total, "perRule": per_rule}
+
+
+def git_hygiene(workspace, key):
+    code, log = sh(["git", "log", "--format=%s", "fixture..HEAD"], workspace)
+    if code != 0:
+        code, log = sh(["git", "log", "--format=%s"], workspace)
+        messages = [m for m in log.splitlines() if m.strip() and m.strip() != "fixture"]
+    else:
+        messages = [m for m in log.splitlines() if m.strip()]
+    good = [m for m in messages if re.match(r"^%s: \S" % re.escape(key), m)]
+    _, stat = sh(["git", "diff", "--shortstat", "fixture", "HEAD"], workspace)
+    _, names = sh(["git", "diff", "--name-only", "fixture", "HEAD"], workspace)
+    _, dirty = sh(["git", "status", "--short"], workspace)
+    return {"commits": len(messages), "wellFormed": len(good), "messages": messages[:20], "shortstat": stat.strip(),
+            "filesChanged": [n for n in names.splitlines() if n.strip()], "uncommitted": len([l for l in dirty.splitlines() if l.strip()])}
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("task")
+    parser.add_argument("workspace")
+    parser.add_argument("--port", type=int, default=5177)
+    args = parser.parse_args()
+    key = {"T1": "ORD-42", "T2": "ORD-43", "T3": "ORD-44"}[args.task]
+    result = {"task": args.task, "build": build(args.workspace)}
+    result["tests"] = tests(args.workspace) if result["build"]["ok"] else {"ok": False, "passed": 0, "failed": 0, "total": 0, "tail": "no build"}
+    checks = []
+    if result["build"]["ok"]:
+        api = run_api(args.workspace, args.port)
+        if api is None:
+            checks = [{"name": "api starts", "ok": False, "detail": "dotnet run did not answer within 60 s"}]
+        else:
+            try:
+                checks = ACCEPTANCE[args.task](f"http://127.0.0.1:{args.port}")
+            finally:
+                api.kill()
+    result["acceptance"] = {"passed": sum(c["ok"] for c in checks), "total": len(checks) or len(ACCEPTANCE[args.task]("http://127.0.0.1:1")), "checks": checks}
+    result["plantedBugFixed"] = any(c["ok"] and c["name"] == PLANTED[args.task] for c in checks)
+    result["conventions"] = conventions(args.workspace)
+    result["git"] = git_hygiene(args.workspace, key)
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    main()
