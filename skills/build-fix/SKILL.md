@@ -1,7 +1,7 @@
 ---
 name: build-fix
 description: >
-  Autonomous iteration loops for .NET: drive a broken build or failing test
+  A whole job here belongs to the `agentic-sdd-flow:build-error-resolver` agent — dispatch it instead of doing the work inline; load this skill yourself only inside that agent or for a narrow question. Autonomous iteration loops for .NET: drive a broken build or failing test
   suite to green with bounded iterations, progress detection, and fail-safe
   guards that prevent infinite retries and wasted tokens. The build-fix loop
   (dotnet build, parse, categorize, fix, rebuild) is the primary flow; the

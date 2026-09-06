@@ -82,6 +82,46 @@ infrastructure facts. The overlay extends these rules; it never relaxes them.
 - Plans, task briefs and SDD artefacts live in the plans directory from `.claude/agentic-sdd-flow.json`
   (`plansDir`, default `temp/plans/`) — never inside the target repository's tracked tree.
 - `finishing-a-development-branch`: decline the merge / push / PR options and report the branch name instead.
-- Delegate .NET test authoring to the `tests-writer` agent; .NET review to the `dotnet-code-review` skill (both ship with this plugin).
+- Delegation follows the **Delegation** section below: whole jobs go to the specialist agents, not to a skill loaded inline.
 - Do not restructure an existing solution, rename projects, or add `Directory.Packages.props`
   without explicit approval.
+
+## Delegation
+
+🔴 **A whole job in a specialist's domain goes to that specialist** through the `Agent` tool
+(`subagent_type: agentic-sdd-flow:<name>`). Loading the matching skill and doing the work in the
+top-level session is a violation, not a shortcut: the specialist carries the Roslyn tooling, the
+checklists and the hand-off keys the top-level session does not. Load a skill inline only for a
+narrow question, a single-file touch, or when you already are that specialist.
+
+Dispatch order — stop at the first match:
+
+1. An explicit user request for a named agent or a typed `/<skill>` wins.
+2. Mandatory routes: .NET review → `code-reviewer` (or the `dotnet-code-review` skill when the user
+   asked for an inline review); .NET test authoring → `tests-writer`, always.
+3. Feature work with a task key → the `dotnet-feature` skill (design gate → plan → `dotnet-sdd`).
+4. A whole job in a domain below → that agent.
+5. Conventions only, for work you do yourself → the skill, inline.
+6. Trivial edits and questions answerable from context → neither.
+
+| The job | Agent |
+|---|---|
+| Broken build after a refactor or package bump | `build-error-resolver` |
+| DbContext, LINQ, EF migrations, N+1, slow EF query | `ef-core-specialist` |
+| Slow endpoint, allocations, caching, DI lifetimes | `performance-analyst` |
+| Postgres tuning, indexes, hot-table migrations | `postgres-specialist` |
+| T-SQL procedures, SSDT/dacpac, SQL Server plans | `tsql-specialist` |
+| Deploy-window / rollback review of any migration | `migration-reviewer` |
+| Auth, secrets, OWASP pass | `security-auditor` |
+| Races, deadlocks, flaky tests, parallel jobs or consumers | `concurrency-specialist` |
+| Dockerfile, CI pipeline, Helm, review environments | `devops-engineer` |
+| Dead code, tech-debt cleanup, pre-MR tidying | `refactor-cleaner` |
+| Audit of a test suite's quality | `test-quality-auditor` |
+| Documentation made stale by a change | `docs-sync` |
+| Solution layout, architecture choice, module boundaries | `dotnet-architect`; spanning services, stores or contracts → the `architecture-design` workflow |
+| REST endpoints, contracts, versioning, OpenAPI | `api-designer` |
+| gRPC (protobuf-net) contracts and compatibility | `grpc-contracts` |
+| One plan task implemented by hand | `dotnet-implementer` |
+| Verifying whether a review finding is real | `findings-verifier` |
+
+Agents cannot dispatch each other; each ends with a **Hand-offs** section and you act on it.

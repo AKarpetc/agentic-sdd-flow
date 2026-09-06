@@ -1,7 +1,7 @@
 ---
 name: postgres-migration
 description: |
-  Use this skill for planning, testing, and safely executing PostgreSQL schema migrations — especially when working with production data or shared databases.
+  A whole job here belongs to the `agentic-sdd-flow:migration-reviewer` agent — dispatch it instead of doing the work inline; load this skill yourself only inside that agent or for a narrow question. Use this skill for planning, testing, and safely executing PostgreSQL schema migrations — especially when working with production data or shared databases.
 
   **Trigger when user asks to:**
   - Test a schema migration before applying it to production

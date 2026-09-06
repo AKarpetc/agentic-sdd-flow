@@ -1,6 +1,6 @@
 ---
 name: optimizing-ef-core-queries
-description: "Optimize and improve the performance of slow Entity Framework Core (EF Core) queries: make them generate less SQL, make fewer database round-trips, and return results faster. Use whenever an EF Core or DbContext query or data-access path is slow or should be made faster — whether or not EF Core owns the database schema. For EF Core, not Dapper or raw ADO.NET."
+description: "A whole job here belongs to the `agentic-sdd-flow:ef-core-specialist` agent — dispatch it instead of doing the work inline; load this skill yourself only inside that agent or for a narrow question. Optimize and improve the performance of slow Entity Framework Core (EF Core) queries: make them generate less SQL, make fewer database round-trips, and return results faster. Use whenever an EF Core or DbContext query or data-access path is slow or should be made faster — whether or not EF Core owns the database schema. For EF Core, not Dapper or raw ADO.NET."
 license: MIT
 ---
 

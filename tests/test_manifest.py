@@ -171,6 +171,35 @@ class Skills(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(ROOT, "skills", name, "SKILL.md")), name)
 
 
+class Delegation(unittest.TestCase):
+    """The contract names every specialist a top-level session must hand a whole job to."""
+
+    WORKFLOW_INTERNAL = {"design-simplicity", "design-scalability", "design-boundaries", "design-judge"}
+
+    def section(self):
+        text = read(os.path.join(_paths.RULES, "RULES-CONTRACT.md"))
+        self.assertIn("## Delegation", text)
+        return text.split("## Delegation", 1)[1]
+
+    def test_every_dispatchable_agent_is_in_the_table(self):
+        section = self.section()
+        agents = {os.path.basename(p)[:-3] for p in markdown_files("agents")} - self.WORKFLOW_INTERNAL
+        missing = {a for a in agents if "`%s`" % a not in section}
+        self.assertEqual(missing, set())
+
+    def test_table_names_only_existing_agents(self):
+        agents = {os.path.basename(p)[:-3] for p in markdown_files("agents")}
+        named = set(re.findall(r"^\|[^|]+\| `([a-z-]+)`", self.section(), re.MULTILINE))
+        self.assertTrue(named <= agents, named - agents)
+
+    def test_overlapping_skills_point_at_their_agent(self):
+        for skill, agent in (("build-fix", "build-error-resolver"), ("optimizing-ef-core-queries", "ef-core-specialist"),
+                             ("postgres-migration", "migration-reviewer")):
+            fields, _ = frontmatter(os.path.join(ROOT, "skills", skill, "SKILL.md"))
+            with self.subTest(skill=skill):
+                self.assertIn("agentic-sdd-flow:%s" % agent, fields["description"])
+
+
 class Rules(unittest.TestCase):
     def test_contract_names_only_existing_rule_files(self):
         contract = read(os.path.join(_paths.RULES, "RULES-CONTRACT.md"))

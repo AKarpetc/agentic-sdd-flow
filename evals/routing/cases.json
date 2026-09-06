@@ -2,7 +2,18 @@
   "fixture": "../fixtures/orders-service",
   "defaults": {
     "max_turns": 8,
-    "allowed_tools": ["Agent", "Skill", "Workflow", "Read", "Grep", "Glob", "Bash(git *)", "Bash(ls *)", "Bash(roslyn-query.py *)", "Bash(find *)"]
+    "allowed_tools": [
+      "Agent",
+      "Skill",
+      "Workflow",
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash(git *)",
+      "Bash(ls *)",
+      "Bash(roslyn-query.py *)",
+      "Bash(find *)"
+    ]
   },
   "cases": [
     {
@@ -10,39 +21,98 @@
       "prompt": "Review src/Orders.Api/Services/ReportService.cs for convention and correctness problems and report the findings. Do not edit any file.",
       "max_turns": 6,
       "expect_any": [
-        {"tool": "Skill", "input": "dotnet-code-review"},
-        {"tool": "Agent", "input": "agentic-sdd-flow:code-reviewer"}
+        {
+          "tool": "Skill",
+          "input": "dotnet-code-review"
+        },
+        {
+          "tool": "Agent",
+          "input": "agentic-sdd-flow:code-reviewer"
+        }
       ]
     },
     {
       "name": "tests-dotnet",
       "prompt": "Add a unit test for OrderService.CanCancelAsync in tests/Orders.Api.Tests. The .NET SDK is not available in this workspace, so do not run dotnet; just write the test file and commit it.",
-      "allowed_tools_extra": ["Write", "Edit"],
-      "expect_any": [{"tool": "Agent", "input": "agentic-sdd-flow:tests-writer"}],
-      "forbid": [{"tool": "Write", "input": "Tests?\\.cs"}, {"tool": "Edit", "input": "Tests?\\.cs"}]
+      "allowed_tools_extra": [
+        "Write",
+        "Edit"
+      ],
+      "expect_any": [
+        {
+          "tool": "Agent",
+          "input": "agentic-sdd-flow:tests-writer"
+        }
+      ],
+      "forbid": [
+        {
+          "tool": "Write",
+          "input": "Tests?\\.cs"
+        },
+        {
+          "tool": "Edit",
+          "input": "Tests?\\.cs"
+        }
+      ]
     },
     {
       "name": "feature-ticket",
       "prompt": "Implement ORD-42: add a GET /api/customers/{id}/orders/total endpoint that returns the customer's non-cancelled order total.",
       "max_turns": 6,
-      "expect_any": [{"tool": "Skill", "input": "dotnet-feature"}]
+      "expect_any": [
+        {
+          "tool": "Skill",
+          "input": "dotnet-feature"
+        }
+      ]
     },
     {
       "name": "build-broken",
       "prompt": "After bumping Microsoft.EntityFrameworkCore the build of Orders.Api fails with CS0246 and CS1061 errors in ReportService.cs. Get it compiling again.",
-      "allowed_tools_extra": ["Write", "Edit", "Bash(dotnet *)"],
+      "allowed_tools_extra": [
+        "Write",
+        "Edit",
+        "Bash(dotnet *)"
+      ],
       "expect_any": [
-        {"tool": "Agent", "input": "agentic-sdd-flow:build-error-resolver"},
-        {"tool": "Skill", "input": "build-fix"}
+        {
+          "tool": "Agent",
+          "input": "agentic-sdd-flow:build-error-resolver"
+        }
+      ],
+      "forbid": [
+        {
+          "tool": "Skill",
+          "input": "build-fix"
+        }
       ]
     },
     {
       "name": "slow-query",
       "prompt": "TotalForCustomerAsync is slow in production: ListByCustomerAsync loads every order together with its lines and then filters in memory (N+1). Fix the data access.",
-      "allowed_tools_extra": ["Write", "Edit"],
+      "allowed_tools_extra": [
+        "Write",
+        "Edit"
+      ],
       "expect_any": [
-        {"tool": "Agent", "input": "agentic-sdd-flow:(ef-core-specialist|performance-analyst)"},
-        {"tool": "Skill", "input": "optimizing-ef-core-queries|ef-core"}
+        {
+          "tool": "Agent",
+          "input": "agentic-sdd-flow:(ef-core-specialist|performance-analyst)"
+        }
+      ],
+      "forbid": [
+        {
+          "tool": "Skill",
+          "input": "optimizing-ef-core-queries|ef-core"
+        },
+        {
+          "tool": "Edit",
+          "input": "\\.cs"
+        },
+        {
+          "tool": "Write",
+          "input": "\\.cs"
+        }
       ]
     },
     {
@@ -50,9 +120,14 @@
       "prompt": "We need to publish OrderPlaced events from Orders.Api to a new notifications service reliably, without losing events when RabbitMQ is down. Design it before any code is written.",
       "max_turns": 6,
       "expect_any": [
-        {"tool": "Workflow", "input": "architecture-design"},
-        {"tool": "Agent", "input": "agentic-sdd-flow:dotnet-architect"},
-        {"tool": "Skill", "input": "architecture-design|architecture-advisor"}
+        {
+          "tool": "Workflow",
+          "input": "architecture-design"
+        },
+        {
+          "tool": "Agent",
+          "input": "agentic-sdd-flow:dotnet-architect"
+        }
       ]
     },
     {
@@ -60,25 +135,63 @@
       "prompt": "Review this PostgreSQL migration for deploy safety: it adds a NOT NULL column Region with DEFAULT 'EU' to the orders table, which has 40 million rows, and rebuilds the index on CustomerId. Is it safe to deploy during business hours?",
       "max_turns": 6,
       "expect_any": [
-        {"tool": "Agent", "input": "agentic-sdd-flow:(migration-reviewer|postgres-specialist)"},
-        {"tool": "Skill", "input": "postgres-migration|postgres-best-practices"}
+        {
+          "tool": "Agent",
+          "input": "agentic-sdd-flow:(migration-reviewer|postgres-specialist)"
+        }
+      ],
+      "forbid": [
+        {
+          "tool": "Skill",
+          "input": "postgres-migration|postgres-best-practices"
+        }
       ]
     },
     {
       "name": "non-dotnet-control",
       "prompt": "In scripts/report.py rename the variable x to total. Nothing else.",
       "max_turns": 4,
-      "allowed_tools_extra": ["Edit"],
-      "forbid": [{"tool": "Agent", "input": "agentic-sdd-flow"}, {"tool": "Skill", "input": "agentic-sdd-flow"}, {"tool": "Workflow", "input": ""}],
-      "expect_any": [{"tool": "Edit", "input": "report\\.py"}]
+      "allowed_tools_extra": [
+        "Edit"
+      ],
+      "forbid": [
+        {
+          "tool": "Agent",
+          "input": "agentic-sdd-flow"
+        },
+        {
+          "tool": "Skill",
+          "input": "agentic-sdd-flow"
+        },
+        {
+          "tool": "Workflow",
+          "input": ""
+        }
+      ],
+      "expect_any": [
+        {
+          "tool": "Edit",
+          "input": "report\\.py"
+        }
+      ]
     },
     {
       "name": "write-gate",
       "prompt": "Create src/Orders.Api/Services/PricingService.cs: a class PricingService that receives IOrderRepository through a C# 12 primary constructor and exposes Task<decimal> TotalAsync(long orderId, CancellationToken cancellationToken) returning the order's Total or 0 when it does not exist. Write the file directly yourself, do not delegate.",
       "max_turns": 6,
-      "allowed_tools_extra": ["Write", "Edit"],
-      "text_regex": ["(hook|gate|convention).{0,80}(block|reject)|(block|reject).{0,80}primary constructor"],
-      "file_absent": [{"path": "src/Orders.Api/Services/PricingService.cs", "regex": "class\\s+PricingService\\s*\\("}]
+      "allowed_tools_extra": [
+        "Write",
+        "Edit"
+      ],
+      "text_regex": [
+        "(hook|gate|convention).{0,80}(block|reject)|(block|reject).{0,80}primary constructor"
+      ],
+      "file_absent": [
+        {
+          "path": "src/Orders.Api/Services/PricingService.cs",
+          "regex": "class\\s+PricingService\\s*\\("
+        }
+      ]
     }
   ]
 }

@@ -47,7 +47,9 @@ All resolve as `agentic-sdd-flow:<name>` and none can dispatch other agents. Spe
 ## What the plugin enforces
 
 `rules/RULES-CONTRACT.md` is injected into every session, subagent and plan-driven prompt; a
-PostToolUse hook rejects newly introduced violations in `.cs`/`.csproj` files. The write gate
+PostToolUse hook rejects newly introduced violations in `.cs`/`.csproj` files. Its **Delegation**
+section is the dispatch policy: a whole job in a specialist's domain goes to that agent through the
+`Agent` tool, and loading the matching skill inline instead counts as a violation. The write gate
 compares against the committed version of the file and reports only newly introduced violations,
 keyed by rule and message — a second occurrence of a violation the file already contains is not
 blocked. Full rules: `rules/`.
