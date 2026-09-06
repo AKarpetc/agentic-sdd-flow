@@ -124,6 +124,7 @@ class SubagentMode(InjectorCase):
         self.assertIn("# Rules Contract", context)
         self.assertIn("## Working budget", context)
         self.assertIn("dotnet --version", context)
+        self.assertIn("timeout: 120000", context)
         self.assertLess(context.index("## Working budget"), context.index("# Rules Contract"))
 
     def test_budget_is_for_agents_only(self):

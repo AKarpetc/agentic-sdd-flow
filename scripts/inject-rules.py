@@ -45,7 +45,9 @@ WORKING_BUDGET = """\
   third identical failure is a blocked result, not another attempt.
 - Ten minutes without a visible result (a commit, a finding, a written artefact) means stop: return
   your report with status blocked or done_with_concerns and what you tried.
-- Long shell commands run with a timeout; nothing waits on the network or on user input."""
+- Every `dotnet` command runs through the Bash tool with `timeout: 120000` (two minutes) and never
+  in the background; a restore or build that does not finish inside it is a failure to record, not a
+  task to poll. Nothing waits on the network or on user input."""
 
 SUBAGENT_HEADER = """\
 <rules-contract enforcement="mandatory">
