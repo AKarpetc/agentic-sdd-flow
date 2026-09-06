@@ -26,7 +26,8 @@ class RoutingCases(unittest.TestCase):
 
     def test_fixture_and_runner_exist(self):
         fixture = os.path.normpath(os.path.join(os.path.dirname(SUITE), self.suite["fixture"]))
-        self.assertTrue(os.path.isfile(os.path.join(fixture, "Orders.sln")), fixture)
+        self.assertTrue(os.path.isfile(os.path.join(fixture, "Orders.slnx")), fixture)
+        self.assertIn("api.nuget.org", open(os.path.join(fixture, "nuget.config"), encoding="utf-8").read())
         self.assertTrue(os.access(os.path.join(os.path.dirname(SUITE), "run.py"), os.X_OK))
 
     def test_case_names_are_unique_and_prompts_present(self):

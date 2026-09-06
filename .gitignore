@@ -3,3 +3,5 @@ temp/
 .DS_Store
 __pycache__/
 *.pyc
+evals/fixtures/**/bin/
+evals/fixtures/**/obj/

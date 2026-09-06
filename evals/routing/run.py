@@ -29,7 +29,7 @@ def load_cases(path):
 
 def prepare_workspace(fixture, root, name):
     workspace = os.path.join(root, name)
-    shutil.copytree(fixture, workspace)
+    shutil.copytree(fixture, workspace, ignore=shutil.ignore_patterns("bin", "obj"))
     git = ["git", "-C", workspace, "-c", "user.name=evals", "-c", "user.email=evals@example.com"]
     subprocess.run(["git", "init", "-q", workspace], check=True)
     subprocess.run(git + ["add", "."], check=True)
