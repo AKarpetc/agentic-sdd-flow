@@ -122,6 +122,15 @@ class SubagentMode(InjectorCase):
         self.assertIn(os.path.join(_paths.PLUGIN_ROOT, "bin", "roslyn-query.py"), context)
         self.assertIn("overlay fact", context)
         self.assertIn("# Rules Contract", context)
+        self.assertIn("## Working budget", context)
+        self.assertIn("dotnet --version", context)
+        self.assertLess(context.index("## Working budget"), context.index("# Rules Contract"))
+
+    def test_budget_is_for_agents_only(self):
+        _, session = self.run_mode("session")
+        _, prompt = self.run_mode("prompt", {"prompt": "execute the plan"})
+        self.assertNotIn("## Working budget", session)
+        self.assertNotIn("## Working budget", prompt)
 
     def test_default_mode_is_subagent(self):
         stdin = io.StringIO("{}")

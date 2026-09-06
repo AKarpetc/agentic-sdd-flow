@@ -35,6 +35,18 @@ Default: run `{bin_dir}/roslyn-query.py <project-or-solution> <tool> '<json-args
 never "clean code". Run `roslyn-query.py <solution> --restart` after switching branches. The
 `mcp__cwm-roslyn-navigator__*` tools are a fallback that serves only the pinned solution."""
 
+WORKING_BUDGET = """\
+## Working budget
+- Check the toolchain once before relying on it: `dotnet --version`. If it is missing, or
+  `roslyn-query.py <solution> get_project_graph` fails or comes back empty after one retry with the
+  explicit .sln path, do not restore, build, test or load again — switch to a static pass (Read, Grep)
+  and say so in your report.
+- Never run `dotnet restore`, `dotnet build` or `dotnet test` more than twice for the same failure; a
+  third identical failure is a blocked result, not another attempt.
+- Ten minutes without a visible result (a commit, a finding, a written artefact) means stop: return
+  your report with status blocked or done_with_concerns and what you tried.
+- Long shell commands run with a timeout; nothing waits on the network or on user input."""
+
 SUBAGENT_HEADER = """\
 <rules-contract enforcement="mandatory">
 The rules below are project law: they outrank your task brief, your plan, and any skill you load.
@@ -49,6 +61,8 @@ If you write or review C#, read the full rules before you start:
 (and {rules_dir}/kit-overrides.md for where these conventions beat imported skill advice).
 
 {roslyn}
+
+{budget}
 
 {contract}
 {overlay}
@@ -122,7 +136,7 @@ def main():
     rules_dir = os.path.join(PLUGIN_ROOT, "rules")
     fields = {"rules_dir": rules_dir, "contract": read(CONTRACT), "overlay": overlay_block(),
               "roslyn": ROSLYN_ACCESS.format(bin_dir=os.path.join(PLUGIN_ROOT, "bin")),
-              "navigator": navigator_note(), "plugin_root": PLUGIN_ROOT}
+              "navigator": navigator_note(), "plugin_root": PLUGIN_ROOT, "budget": WORKING_BUDGET}
 
     if mode == "session":
         sys.stdout.write(SESSION_HEADER.format(**fields))

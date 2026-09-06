@@ -4,14 +4,32 @@ Spec-driven agentic development flow for .NET as a Claude Code plugin: opinionat
 Roslyn-first specialist agents, a deterministic implement → test → review → verify → fix
 workflow, and one entry-point skill.
 
-## Install
+## Install and connect
 
+### 1. Prerequisites (once per machine)
+
+| Need | Check | Install |
+|---|---|---|
+| Claude Code, current release | `claude --version` | `claude update` |
+| .NET SDK on PATH | `dotnet --version` | https://dot.net — the version your solutions target |
+| Python 3.9+ | `python3 --version` | ships with macOS/Xcode tools; `apt install python3` on Linux |
+| CWM.RoslynNavigator ≥ 0.8.0 | `dotnet tool list --global` | installed on first use by `roslyn-query.py`; or `dotnet tool install --global CWM.RoslynNavigator` — keep `~/.dotnet/tools` on PATH |
+| superpowers plugin (brainstorming, writing-plans, SDD scripts) | `claude plugin list` | `claude plugin install superpowers@claude-plugins-official` |
+| Git identity | `git config user.name` | the workflows commit on your behalf |
+
+Optional: `node` (only for `node --check` in the test-suite), `uvx`/`npx` for the database MCP servers,
+the `spec-coding` MCP server at user scope for the `spec-coding` skill.
+
+### 2. Install the plugin
+
+Personal (user scope, every repository):
 ```
-/plugin marketplace add AKarpetc/agentic-sdd-flow
-/plugin install agentic-sdd-flow@agentic-sdd-flow
+claude plugin marketplace add AKarpetc/agentic-sdd-flow
+claude plugin install agentic-sdd-flow@agentic-sdd-flow
 ```
 
-Team-wide, in the repository's `.claude/settings.json`:
+Team-wide: commit this to the repository's `.claude/settings.json` and every developer gets the
+marketplace registered; each of them still runs the `install` line once, then restarts Claude Code.
 ```json
 {
   "extraKnownMarketplaces": { "agentic-sdd-flow": { "source": { "source": "github", "repo": "AKarpetc/agentic-sdd-flow" } } },
@@ -19,10 +37,69 @@ Team-wide, in the repository's `.claude/settings.json`:
 }
 ```
 
-Requirements: .NET SDK, `CWM.RoslynNavigator` ≥ 0.8.0 (installed on first use), the
-[superpowers](https://github.com/obra/superpowers) plugin (brainstorming, writing-plans and the
-SDD helper scripts), Python 3; the `spec-coding` skill additionally needs the `spec-coding` MCP
-server registered at user scope.
+**Restart Claude Code after installing or updating.** Skills register live, but agents, workflows
+and hooks are read at session start.
+
+### 3. Verify
+
+```
+claude plugin list | grep -A3 agentic-sdd-flow          # Status: enabled, the version you expect
+roslyn-query.py <project-or-solution> --status           # a JSON status line, loadSeconds > 0
+```
+In a new session the injected context must show one `<rules-contract enforcement="mandatory">` block
+(plus one `<overlay-contract>` inside it when the repository has an overlay). Ask the session to write a
+`.cs` file with a primary constructor on a DI class: the hook must reject it with `[no-primary-ctor]`.
+The `Agent` tool's list must contain `agentic-sdd-flow:tests-writer`; a bare `tests-writer` means a
+project-level `.claude/agents/` still shadows the plugin — remove it.
+
+### 4. Connect a repository
+
+Add the two consumer files (copy from `examples/overlay/`):
+
+- `.claude/agentic-sdd-flow.json` — `projects` (name → solution path, what `roslyn-query.py <name>`
+  resolves), `plansDir`, `adrDir`, `docsPaths`, `checks`, `handoffs`, `overlayContract`.
+- `.claude/rules/OVERLAY-CONTRACT.md` — facts about your systems; injected right after the plugin
+  contract and never allowed to relax it.
+
+Delete anything the plugin now provides: project-level copies of the rules, the agents with the same
+names, the `roslyn-navigator.sh` script and the local rule hooks. Keep only company-specific skills
+(the ones your `handoffs` point at).
+
+### 5. Wire the two things a plugin cannot ship
+
+Roslyn fallback MCP server (the primary path is `roslyn-query.py` over Bash; the MCP server serves the
+solution pinned by `bin/bind-roslyn.sh` and its tool names match the agents' allowlists):
+```
+claude mcp add -s user cwm-roslyn-navigator -e DOTNET_ROOT=/usr/local/share/dotnet -- <plugin checkout>/bin/roslyn-navigator.sh
+# DOTNET_ROOT is the directory that holds the dotnet executable (`dirname "$(realpath "$(which dotnet)")"`)
+```
+Agent pulse in the status line (see *Agent pulse* below), in `~/.claude/settings.json`:
+```json
+{ "statusLine": { "type": "command", "command": "<plugin checkout>/bin/agent-pulse.sh", "refreshInterval": 5 } }
+```
+`<plugin checkout>` is a git clone of this repository, not the version-numbered cache under
+`~/.claude/plugins/cache/` — the clone path survives updates. Database access for the SQL agents
+needs `ASF_POSTGRES_URI` or `ASF_MSSQL_*` in the shell (see *Databases*).
+
+### 6. Update
+
+Every runtime change ships as a new version: bump `version` in `.claude-plugin/plugin.json` **and**
+`.claude-plugin/marketplace.json`, push, then on each machine
+```
+claude plugin update agentic-sdd-flow@agentic-sdd-flow   # "already at the latest version" means the version was not bumped
+```
+and restart. `claude plugin uninstall` + `install` is the fallback when the cache looks stale.
+
+### Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| No `<rules-contract>` block at session start | plugin not enabled for this scope, or the session predates the install | `claude plugin list`; restart |
+| Agents missing from the `Agent` tool, or bare names present | started before the install; a project `.claude/agents/` shadows the plugin | restart; delete the project copies |
+| `cwm-roslyn-navigator` fails with ENOENT | the user-scope MCP entry still points at a deleted script | re-add it as in step 5 |
+| `roslyn-query.py` returns an empty graph | wrong solution resolved (mis-bind), not clean code | pass the explicit `.sln` path; check `projects` in the config |
+| `plugin update` says "already at the latest version" after a push | the version was not bumped | bump both manifests and push again |
+| The write gate blocks a legacy file you only touched | it compares with `HEAD`; a genuinely new violation was introduced | fix it, or tune the check id in `checks` |
 
 ## Use
 
