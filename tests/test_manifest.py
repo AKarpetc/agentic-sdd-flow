@@ -18,7 +18,7 @@ NAVIGATOR_TOOLS = {
     "get_project_graph", "get_public_api", "get_symbol_detail", "get_symbol_source", "get_test_coverage_map",
     "get_type_hierarchy",
 }
-HOOK_EVENTS = {"SessionStart", "SubagentStart", "UserPromptSubmit", "PostToolUse", "PreToolUse", "Stop"}
+HOOK_EVENTS = {"SessionStart", "SubagentStart", "SubagentStop", "UserPromptSubmit", "PostToolUse", "PreToolUse", "Stop"}
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 
 
@@ -66,7 +66,7 @@ class Manifests(unittest.TestCase):
     def test_hooks_reference_existing_scripts(self):
         hooks = json.loads(read(os.path.join(ROOT, "hooks", "hooks.json")))["hooks"]
         self.assertTrue(set(hooks) <= HOOK_EVENTS, set(hooks))
-        self.assertEqual(set(hooks), {"SessionStart", "SubagentStart", "UserPromptSubmit", "PostToolUse"})
+        self.assertEqual(set(hooks), {"SessionStart", "SubagentStart", "SubagentStop", "UserPromptSubmit", "PostToolUse", "PreToolUse"})
         for event, groups in hooks.items():
             for group in groups:
                 for hook in group["hooks"]:
@@ -75,6 +75,8 @@ class Manifests(unittest.TestCase):
                     self.assertIsNotNone(match, hook["command"])
                     self.assertTrue(os.path.isfile(os.path.join(ROOT, match.group(1))), match.group(1))
         self.assertEqual(hooks["PostToolUse"][0]["matcher"], "Write|Edit|MultiEdit|NotebookEdit")
+        self.assertEqual(hooks["PreToolUse"][0]["matcher"], ".*")
+        self.assertTrue(all("agent-pulse.py" in h["command"] for h in hooks["SubagentStop"][0]["hooks"]))
 
     def test_mcp_servers_resolve(self):
         servers = json.loads(read(os.path.join(ROOT, ".mcp.json")))["mcpServers"]

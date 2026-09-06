@@ -87,6 +87,31 @@ See `examples/overlay/`.
 navigator per solution. `bind-roslyn.sh <target>` pins the fallback MCP server
 (`${CLAUDE_PLUGIN_DATA}/roslyn-solution`).
 
+## Agent pulse (status line)
+
+A long subagent run looks frozen: the parent session is blocked on the `Agent` call and cannot post
+anything until it returns, and no hook fires on a timer. What can move is the status line, so the
+plugin keeps an **agent pulse** for it. `PreToolUse`, `SubagentStart` and `SubagentStop` hooks record
+every subagent's type, start time, tool count and last action (`Bash dotnet test`, `Edit
+OrderServiceTests.cs`, `find_symbol OrderService`) in `~/.agentic-sdd-flow/pulse/<session>.json`;
+`bin/agent-pulse.sh` renders it:
+
+```
+⟳ tests-writer 2m10s · Bash Run the tests (14)  |  ⟳ code-reviewer 0m40s · Read OrderService.cs (6)
+```
+
+A plugin cannot ship a `statusLine`, so wire it once in `~/.claude/settings.json` (the checkout
+path survives plugin updates; `refreshInterval` keeps it ticking while the session waits):
+
+```json
+{
+  "statusLine": { "type": "command", "command": "<plugin checkout>/bin/agent-pulse.sh", "refreshInterval": 5 }
+}
+```
+
+Finished agents stay visible as `✓ tests-writer 2m30s` for two minutes. The hook never blocks and
+never writes to the model's context; a broken pulse costs nothing but the line.
+
 ## Databases (read-only MCP)
 
 Two optional MCP servers give the SQL agents live schema and plan access. Both are configured to fail closed when their environment variables are unset, and every other tool keeps working either way; the SQL Server server has been observed doing so, the Postgres server has not been exercised. Point them at a development database, never production.

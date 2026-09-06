@@ -1,6 +1,6 @@
 {
   "name": "agentic-sdd-flow",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Spec-driven agentic development flow for .NET: opinionated conventions, Roslyn-first specialist agents, a deterministic implement/test/review/fix workflow, and a single entry-point skill.",
   "author": { "name": "Artyom Karpets" },
   "homepage": "https://github.com/AKarpetc/agentic-sdd-flow",
