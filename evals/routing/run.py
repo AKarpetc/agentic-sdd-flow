@@ -37,7 +37,7 @@ def prepare_workspace(fixture, root, name):
     return workspace
 
 
-def run_case(case, defaults, fixture, root, model):
+def run_case(case, defaults, fixture, root, model, timeout):
     workspace = prepare_workspace(fixture, root, case["name"])
     allowed = list(defaults["allowed_tools"]) + list(case.get("allowed_tools_extra", []))
     command = ["claude", "-p", case["prompt"], "--output-format", "stream-json", "--verbose",
@@ -48,12 +48,22 @@ def run_case(case, defaults, fixture, root, model):
         command += ["--model", model]
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
     started = time.time()
-    proc = subprocess.run(command, cwd=workspace, env=env, capture_output=True, text=True, timeout=1500)
-    raw = proc.stdout
-    with open(os.path.join(root, case["name"] + ".stream.jsonl"), "w", encoding="utf-8") as handle:
-        handle.write(raw)
+    stream_path = os.path.join(root, case["name"] + ".stream.jsonl")
+    timed_out = False
+    with open(stream_path, "w", encoding="utf-8") as stream, open(stream_path + ".stderr", "w", encoding="utf-8") as errors:
+        proc = subprocess.Popen(command, cwd=workspace, env=env, stdout=stream, stderr=errors, text=True)
+        try:
+            proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            proc.kill()
+            proc.wait()
+    with open(stream_path, encoding="utf-8") as handle:
+        raw = handle.read()
     outcome = score(case, raw, workspace)
-    outcome.update({"exit": proc.returncode, "seconds": round(time.time() - started, 1), "stderr": proc.stderr[-800:]})
+    if timed_out:
+        outcome["subtype"] = "harness_timeout"
+    outcome.update({"exit": proc.returncode, "seconds": round(time.time() - started, 1)})
     return outcome
 
 
@@ -125,6 +135,7 @@ def main():
     parser.add_argument("--model")
     parser.add_argument("--out", help="results directory (default: a temp directory)")
     parser.add_argument("--rescore", metavar="DIR", help="re-score the <case>.stream.jsonl files in DIR instead of running")
+    parser.add_argument("--timeout", type=int, default=900, help="seconds per session; a timed-out session is scored on what it streamed")
     args = parser.parse_args()
 
     suite = load_cases(os.path.join(HERE, "cases.json"))
@@ -142,7 +153,7 @@ def main():
             results.append(score(case, open(stream, encoding="utf-8").read(), os.path.join(root, case["name"])))
         return report(results, root)
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = {pool.submit(run_case, c, suite["defaults"], fixture, root, args.model): c["name"] for c in cases}
+        futures = {pool.submit(run_case, c, suite["defaults"], fixture, root, args.model, args.timeout): c["name"] for c in cases}
         for future in concurrent.futures.as_completed(futures):
             name = futures[future]
             try:
