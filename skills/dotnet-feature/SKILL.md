@@ -60,7 +60,12 @@ Invoke `superpowers:brainstorming` with the description. Keep its approval gate.
 Invoke `superpowers:writing-plans`. Save the plan as `<plansDir>/<YYYY-MM-DD>-<TASK-KEY>.md`
 (`plansDir` from config, default `temp/plans/`, resolved from the repository root — never inside
 the target project's tracked tree). When the skill offers its **Execution Handoff** menu, do not
-show it: go to step 4.
+show it. Before step 4 the plan is reviewed by its own reviewer: dispatch `agentic-sdd-flow:plan-reviewer`
+with the plan path and the spec path; apply every critical and important finding to the plan yourself
+and dispatch the reviewer once more (it verdicts the prior ids first). Only an approved verdict goes
+to step 4. The `dotnet-sdd` workflow runs the same review again as its Plan review phase; if it
+returns `status: plan_rejected`, its `openQuestions` are the findings — fix the plan and rerun the
+workflow with `resumeFromRunId`.
 
 ## 4. Execute — the `dotnet-sdd` workflow
 

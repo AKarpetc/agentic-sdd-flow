@@ -9,8 +9,9 @@ export const meta = {
     { title: 'Judge', detail: 'panel, refutation, synthesis' },
     { title: 'Threats' },
     { title: 'Data' },
-    { title: 'Critic' },
+    { title: 'Design review', detail: 'design-reviewer: drivers, consistency, sketches, threats and data answered' },
     { title: 'Record', detail: 'ADRs and spec, after approval' },
+    { title: 'Spec review', detail: 'design-reviewer on the written spec, one fix pass' },
   ],
 }
 
@@ -22,6 +23,7 @@ const AGENT = {
   judge: PREFIX + 'design-judge',
   security: PREFIX + 'security-auditor',
   migration: PREFIX + 'migration-reviewer',
+  reviewer: PREFIX + 'design-reviewer',
 }
 const RULES_PREAMBLE = 'Read the plugin rules contract (rules/RULES-CONTRACT.md under the agentic-sdd-flow plugin root, or the <rules-contract> block already in your context) before anything else. The architecture-design skill and its references live under <plugin root>/skills/architecture-design/.\n'
 
@@ -66,8 +68,12 @@ const DATA = { type: 'object', required: ['status', 'findings', 'sequence'],
   properties: { artifact: { type: 'string' }, status: { enum: ['APPROVED', 'CHANGES_REQUESTED', 'BLOCKED'] },
     findings: { type: 'array', items: { type: 'object', required: ['id', 'severity', 'issue'], properties: { id: { type: 'string' }, severity: { enum: ['critical', 'important', 'minor'] }, issue: { type: 'string' } } } },
     sequence: { type: 'array', items: { type: 'string' } } } }
-const CRITIC = { type: 'object', required: ['artifact', 'unanswered'],
-  properties: { artifact: { type: 'string' }, unanswered: { type: 'array', items: { type: 'object', required: ['driverId', 'gap'], properties: { driverId: { type: 'string' }, gap: { type: 'string' } } } } } }
+const REVIEW = { type: 'object', required: ['approved', 'findings', 'unanswered', 'artifact', 'summary'],
+  properties: { approved: { type: 'boolean' },
+    findings: { type: 'array', items: { type: 'object', required: ['id', 'severity', 'area', 'issue'],
+      properties: { id: { type: 'string' }, severity: { enum: ['critical', 'important', 'minor'] }, area: { type: 'string' }, ref: { type: 'string' }, issue: { type: 'string' } } } },
+    unanswered: { type: 'array', items: { type: 'object', required: ['driverId', 'gap'], properties: { driverId: { type: 'string' }, gap: { type: 'string' } } } },
+    artifact: { type: 'string' }, summary: { type: 'string' } } }
 const ADRS = { type: 'object', required: ['paths'], properties: { paths: { type: 'array', items: { type: 'string' } } } }
 const SPEC = { type: 'object', required: ['path', 'selfReview'], properties: { path: { type: 'string' }, selfReview: { type: 'string' } } }
 
@@ -134,16 +140,17 @@ const data = await agent(
   `${common}Review the data model and migration implications of ${winner.id} (${winner.artifact}, decisions ${decision.artifact}) against the current state ${currentC4}. Deploy-window matrix, backfills, indexes on hot tables, rollback. Use the postgres-mcp / mssql-mcp tools when their environment is set; otherwise say "schema source: repository". Return the JSON (ids M1…). Return JSON { status: APPROVED|CHANGES_REQUESTED|BLOCKED, findings: [{ id: "M1", severity, issue }], sequence: [<expand/migrate/contract steps>] }.`,
   { agentType: AGENT.migration, schema: DATA, label: 'data' })
 
-phase('Critic')
-const critic = await agent(
-  `${common}Completeness critic. Drivers: ${drivers.artifact}. Decision: ${decision.artifact}. Threats: ${threats ? threats.artifact : 'none'}. Data review (inline JSON): ${data ? JSON.stringify(data) : 'none'}. For every driver, find where the winning design answers it; list the drivers with no answer or a hand-wave. Write ${workDir}/06-completeness.md and return the JSON.`,
-  { schema: CRITIC, label: 'critic', effort: 'low' })
-const unanswered = critic ? critic.unanswered : []
-log(`critic: ${unanswered.length} unanswered driver(s)`)
+phase('Design review')
+const designReview = await agent(
+  `${common}Mode: decision. Drivers: ${drivers.artifact}. Current state: ${currentC4}. Proposals: ${proposalFiles}. Decision: ${decision.artifact} (winner ${winner.id}). Threats: ${threats ? threats.artifact : 'none'}. Data review (inline JSON): ${data ? JSON.stringify(data) : 'none'}. Review per your agent instructions, write ${workDir}/06-design-review.md and return the JSON.`,
+  { agentType: AGENT.reviewer, schema: REVIEW, label: 'design-review' })
+const unanswered = designReview ? designReview.unanswered : []
+const designFindings = designReview ? designReview.findings.filter(f => f.severity !== 'minor') : []
+log(`design review: ${designReview ? (designReview.approved ? 'approved' : 'not approved') : 'no verdict'}, ${designFindings.length} blocking finding(s), ${unanswered.length} unanswered driver(s)`)
 
 if (!approvedProposalId) {
   log(`architecture-design proposed ${decision.winnerId} (runner-up ${decision.runnerUpId}); awaiting approval`)
-  return { status: 'proposed', workDir, drivers, proposals, decision, threats, data, unanswered, adrPaths: [], specPath: '' }
+  return { status: 'proposed', workDir, drivers, proposals, decision, threats, data, designReview, unanswered, adrPaths: [], specPath: '', specReview: null }
 }
 if (approvedProposalId !== decision.winnerId) log(`user approved ${approvedProposalId} instead of the panel winner ${decision.winnerId}`)
 const approved = proposals.find(p => p.id === approvedProposalId) || winner
@@ -153,7 +160,27 @@ const adrs = await agent(
   `${common}Approved design: ${approved.id} (${approved.artifact}); decision table: ${JSON.stringify(decision.decisionTable)}. Read <plugin root>/skills/architecture-design/references/decision-recorder.md, adr-madr.md and adr-process.md. Write one MADR-format ADR per decision-table row into ${adrDir} (create it if missing) named NNNN-<slug>.md continuing the highest existing number there; status Proposed; include the reopen trigger. Return the JSON with the paths.`,
   { schema: ADRS, label: 'adrs' })
 const spec = await agent(
-  `${common}Assemble the design spec for ${approved.id}. Inputs: ${approved.artifact}, ${decision.artifact}, ${threats ? threats.artifact : 'no threat model'}, data review (inline JSON): ${data ? JSON.stringify(data) : 'none'}, ${critic ? critic.artifact : ''}, ADRs: ${adrs ? adrs.paths.join(', ') : 'none'}. Read <plugin root>/skills/architecture-design/references/migration-planner.md, diagram-builder.md and sketch-conventions.md, and the "Spec format" section of <plugin root>/skills/architecture-design/SKILL.md. Write ${specsDir}/<today>-${slug}-design.md (create the directory if missing; take today's date from \`date +%F\`). Then self-review it for placeholders, contradictions and unanswered drivers (${JSON.stringify(unanswered)}) and fix inline. Return the JSON with the path and a one-paragraph self-review.`,
+  `${common}Assemble the design spec for ${approved.id}. Inputs: ${approved.artifact}, ${decision.artifact}, ${threats ? threats.artifact : 'no threat model'}, data review (inline JSON): ${data ? JSON.stringify(data) : 'none'}, ${designReview ? designReview.artifact + ' (answer every finding in it)' : ''}, ADRs: ${adrs ? adrs.paths.join(', ') : 'none'}. Read <plugin root>/skills/architecture-design/references/migration-planner.md, diagram-builder.md and sketch-conventions.md, and the "Spec format" section of <plugin root>/skills/architecture-design/SKILL.md. Write ${specsDir}/<today>-${slug}-design.md (create the directory if missing; take today's date from \`date +%F\`). Then self-review it for placeholders, contradictions and unanswered drivers (${JSON.stringify(unanswered)}) and fix inline. Return the JSON with the path and a one-paragraph self-review.`,
   { schema: SPEC, label: 'spec' })
 log(`architecture-design recorded: ${adrs ? adrs.paths.length : 0} ADR(s), spec ${spec ? spec.path : 'missing'}`)
-return { status: spec ? 'recorded' : 'blocked', workDir, drivers, proposals, decision, threats, data, unanswered, adrPaths: adrs ? adrs.paths : [], specPath: spec ? spec.path : '' }
+
+// The written spec gets its own review; one fix pass by the spec author, then a scoped re-review.
+let specReview = null
+if (spec) {
+  phase('Spec review')
+  const reviewSpec = (extra) => agent(
+    `${common}Mode: spec. Spec: ${spec.path}. ADRs: ${adrs ? adrs.paths.join(', ') : 'none'}. Drivers: ${drivers.artifact}. Current state: ${currentC4}. Decision: ${decision.artifact}. Threats: ${threats ? threats.artifact : 'none'}. Data review (inline JSON): ${data ? JSON.stringify(data) : 'none'}. ${extra} Write ${workDir}/08-spec-review.md and return the JSON.`,
+    { agentType: AGENT.reviewer, schema: REVIEW, label: 'spec-review' })
+  specReview = await reviewSpec('Review per your agent instructions.')
+  const blocking = specReview ? specReview.findings.filter(f => f.severity !== 'minor') : []
+  if (blocking.length) {
+    phase('Record')
+    await agent(
+      `${common}Fix the design spec ${spec.path} in place: address exactly these review findings, nothing else, keep the spec format.\n${blocking.map(f => '- [' + f.id + '] ' + (f.ref || '') + ' — ' + f.issue).join('\n')}\nReturn the JSON with the path and a one-paragraph note of what changed.`,
+      { schema: SPEC, label: 'spec-fix' })
+    phase('Spec review')
+    specReview = await reviewSpec(`Scoped re-review: verdict each of these prior findings as addressed, then review only what changed:\n${blocking.map(f => '- [' + f.id + '] ' + f.issue).join('\n')}`) || specReview
+  }
+  log(`spec review: ${specReview ? (specReview.approved ? 'approved' : 'not approved') : 'no verdict'}`)
+}
+return { status: spec ? (specReview && !specReview.approved ? 'recorded_with_findings' : 'recorded') : 'blocked', workDir, drivers, proposals, decision, threats, data, designReview, unanswered, adrPaths: adrs ? adrs.paths : [], specPath: spec ? spec.path : '', specReview }

@@ -4,6 +4,7 @@ export const meta = {
   whenToUse: 'After brainstorming + writing-plans produced a plan file for a .NET project. Usually launched by the dotnet-feature skill.',
   phases: [
     { title: 'Analyze', detail: 'split the plan into task briefs' },
+    { title: 'Plan review', detail: 'plan-reviewer gates the plan against the spec and the conventions' },
     { title: 'Implement' },
     { title: 'Tests' },
     { title: 'Debug', detail: 'debugger finds the root cause before another fix' },
@@ -22,6 +23,7 @@ const AGENT = {
   reviewer: PREFIX + 'code-reviewer',
   verifier: PREFIX + 'findings-verifier',
   debugger: PREFIX + 'debugger',
+  planReviewer: PREFIX + 'plan-reviewer',
 }
 // The default workflow agent does not receive the injected contract, so every prompt asks for it explicitly.
 const RULES_PREAMBLE = 'Read the plugin rules contract (rules/RULES-CONTRACT.md under the agentic-sdd-flow plugin root, or the <rules-contract> block already in your context) before anything else.\n'
@@ -84,6 +86,17 @@ const VERIFY = {
   },
 }
 const SHA = { type: 'object', required: ['sha'], properties: { sha: { type: 'string' } } }
+const PLAN_VERDICT = {
+  type: 'object', required: ['approved', 'findings', 'summary'],
+  properties: {
+    approved: { type: 'boolean' },
+    findings: { type: 'array', items: {
+      type: 'object', required: ['id', 'severity', 'area', 'issue'],
+      properties: { id: { type: 'string' }, severity: { enum: ['critical', 'important', 'minor'] }, task: { type: 'integer' }, area: { type: 'string' }, issue: { type: 'string' } } } },
+    coverage: { type: 'object' },
+    summary: { type: 'string' },
+  },
+}
 const DIAGNOSIS = {
   type: 'object', required: ['rootCause', 'confidence', 'evidence', 'fixBrief', 'files', 'verification'],
   properties: {
@@ -102,7 +115,7 @@ const TESTS_DONE = {
   properties: { status: { enum: ['done', 'done_with_concerns', 'blocked'] }, summary: { type: 'string' } },
 }
 
-const { project, projectDir, plan, taskKey, maxFixRounds = 5, stallRounds = 2, answers = {} } = args
+const { project, projectDir, plan, taskKey, spec = '', maxFixRounds = 5, stallRounds = 2, answers = {}, skipPlanReview = false } = args
 const rulings = [], deferred = [], done = [], openQuestions = []
 
 const sha = (label) => agent(
@@ -133,6 +146,23 @@ if (!tasks.length) {
 }
 for (const c of analysis.conflicts) rulings.push({ stage: 'preflight', note: c })
 log(`${tasks.length} tasks, ${analysis.conflicts.length} preflight conflicts`)
+
+// The plan is reviewed by its own reviewer before any code exists; critical or important findings send it back to the author.
+let planVerdict = null
+if (!skipPlanReview) {
+  phase('Plan review')
+  planVerdict = await agent(
+    `${RULES_PREAMBLE}Working directory: ${projectDir}. Project: ${project}. Task key: ${taskKey}. Plan: ${plan}. ${spec ? 'Spec: ' + spec + '.' : 'No spec file was given: review against the plan\'s own Goal/Context sections.'}
+     Review the plan per your agent instructions and return the JSON verdict.`,
+    { agentType: AGENT.planReviewer, schema: PLAN_VERDICT, label: 'plan-review' })
+  const blockingPlan = planVerdict ? planVerdict.findings.filter(f => f.severity !== 'minor') : []
+  if (!planVerdict) rulings.push({ stage: 'plan-review', status: 'no_verdict' })
+  if (blockingPlan.length) {
+    log(`plan review: ${blockingPlan.length} blocking finding(s) — returning the plan to its author`)
+    return { status: 'plan_rejected', done, rulings, deferred, openQuestions: blockingPlan.map(f => ({ task: f.task || 0, question: `[${f.id}] ${f.area}: ${f.issue}` })), planVerdict, finalVerdict: null, range: '' }
+  }
+  if (planVerdict) deferred.push(...planVerdict.findings.filter(f => f.severity === 'minor').map(f => ({ task: f.task || 0, file: plan, severity: 'minor', issue: `[plan ${f.id}] ${f.issue}` })))
+}
 
 const baseSha = await sha('base-sha')
 let aborted = false
@@ -309,4 +339,4 @@ if (!aborted) {
 
 const status = aborted ? 'blocked' : (rulings.some(r => r.status === 'unstable') ? 'unstable' : 'done')
 log(`dotnet-sdd finished: ${status}, ${done.length}/${tasks.length} tasks approved, ${deferredUnique.length} minors deferred`)
-return { status, done, rulings, deferred: deferredUnique, openQuestions, finalVerdict, range: `${baseSha}..${finalHead}` }
+return { status, done, rulings, deferred: deferredUnique, openQuestions, planVerdict, finalVerdict, range: `${baseSha}..${finalHead}` }

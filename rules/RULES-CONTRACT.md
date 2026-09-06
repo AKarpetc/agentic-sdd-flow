@@ -97,8 +97,11 @@ narrow question, a single-file touch, or when you already are that specialist.
 Dispatch order — stop at the first match:
 
 1. An explicit user request for a named agent or a typed `/<skill>` wins.
-2. Mandatory routes: .NET review → `code-reviewer` (or the `dotnet-code-review` skill when the user
-   asked for an inline review); .NET test authoring → `tests-writer`, always.
+2. Mandatory routes: .NET code review → `code-reviewer` (or the `dotnet-code-review` skill when the user
+   asked for an inline review); a plan → `plan-reviewer`; a design or spec → `design-reviewer`;
+   .NET test authoring → `tests-writer`. Every stage is reviewed by its own reviewer agent, never by
+   the author and never by the top-level session; a reviewer verdict with critical or important
+   findings sends the artifact back to its author.
 3. Feature work with a task key → the `dotnet-feature` skill (design gate → plan → `dotnet-sdd`).
 4. A whole job in a domain below → that agent.
 5. Conventions only, for work you do yourself → the skill, inline.
@@ -122,6 +125,8 @@ Dispatch order — stop at the first match:
 | Solution layout, architecture choice, module boundaries | `dotnet-architect`; spanning services, stores or contracts → the `architecture-design` workflow |
 | REST endpoints, contracts, versioning, OpenAPI | `api-designer` |
 | gRPC (protobuf-net) contracts and compatibility | `grpc-contracts` |
+| Review of an implementation plan against its spec and the conventions | `plan-reviewer` |
+| Review of a design decision, spec or ADR set | `design-reviewer` |
 | One plan task implemented by hand | `dotnet-implementer` |
 | Verifying whether a review finding is real | `findings-verifier` |
 

@@ -260,12 +260,14 @@ class WorkDistribution(unittest.TestCase):
 
     EXPECTED = {
         "dotnet-sdd.js": {
-            "Analyze": set(), "Implement": {"implementer"}, "Tests": {"tests"}, "Debug": {"debugger"},
-            "Review": {"reviewer"}, "Verify": {"verifier"}, "Fix": {"implementer"}, "Final review": {"reviewer"},
+            "Analyze": set(), "Plan review": {"planReviewer"}, "Implement": {"implementer"}, "Tests": {"tests"},
+            "Debug": {"debugger"}, "Review": {"reviewer"}, "Verify": {"verifier"}, "Fix": {"implementer"},
+            "Final review": {"reviewer"},
         },
         "architecture-design.js": {
             "Drivers": set(), "Context": set(), "Proposals": {"simplicity", "scalability", "boundaries"},
-            "Judge": {"judge"}, "Threats": {"security"}, "Data": {"migration"}, "Critic": set(), "Record": set(),
+            "Judge": {"judge"}, "Threats": {"security"}, "Data": {"migration"}, "Design review": {"reviewer"},
+            "Record": set(), "Spec review": {"reviewer"},
         },
     }
     PARALLEL = {"dotnet-sdd.js": {"Verify"}, "architecture-design.js": {"Context", "Proposals", "Judge"}}
@@ -302,6 +304,17 @@ class WorkDistribution(unittest.TestCase):
         self.assertNotIn("reviewer", found["Implement"]["agents"] | found["Fix"]["agents"])
         self.assertNotIn("implementer", found["Review"]["agents"] | found["Final review"]["agents"])
         self.assertIn("agentType: AGENT.verifier", text)
+
+    def test_every_stage_has_its_own_reviewer(self):
+        sdd = self.segments(read(os.path.join(ROOT, "workflows", "dotnet-sdd.js")))
+        design = self.segments(read(os.path.join(ROOT, "workflows", "architecture-design.js")))
+        self.assertEqual(sdd["Plan review"]["agents"], {"planReviewer"})
+        self.assertEqual(design["Design review"]["agents"], {"reviewer"})
+        self.assertEqual(design["Spec review"]["agents"], {"reviewer"})
+        for path, agent in (("plan-reviewer.md", "plan-reviewer"), ("design-reviewer.md", "design-reviewer")):
+            fields, _ = frontmatter(os.path.join(ROOT, "agents", path))
+            tools = {t.strip() for t in fields["tools"].split(",")}
+            self.assertFalse(tools & {"Write", "Edit", "MultiEdit"}, "%s must be read-only" % agent)
 
     def test_debugger_diagnoses_but_never_fixes(self):
         text = read(os.path.join(ROOT, "workflows", "dotnet-sdd.js"))

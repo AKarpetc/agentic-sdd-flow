@@ -213,6 +213,48 @@
           "input": "\\.cs"
         }
       ]
+    },
+    {
+      "name": "plan-review",
+      "prompt": "Review the implementation plan temp/plans/2026-09-06-ORD-42.md against its spec docs/superpowers/specs/2026-09-06-ord-42-design.md before we implement it. Do not change any file.",
+      "max_turns": 6,
+      "expect_any": [
+        {
+          "tool": "Agent",
+          "input": "agentic-sdd-flow:plan-reviewer"
+        }
+      ],
+      "forbid": [
+        {
+          "tool": "Edit",
+          "input": ""
+        },
+        {
+          "tool": "Write",
+          "input": ""
+        }
+      ]
+    },
+    {
+      "name": "design-review",
+      "prompt": "Review the design spec docs/superpowers/specs/2026-09-06-ord-42-design.md before it goes to planning: is it complete, consistent and buildable under our conventions? Do not change any file.",
+      "max_turns": 6,
+      "expect_any": [
+        {
+          "tool": "Agent",
+          "input": "agentic-sdd-flow:design-reviewer"
+        }
+      ],
+      "forbid": [
+        {
+          "tool": "Edit",
+          "input": ""
+        },
+        {
+          "tool": "Write",
+          "input": ""
+        }
+      ]
     }
   ]
 }

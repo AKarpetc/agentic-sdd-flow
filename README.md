@@ -112,6 +112,15 @@ Direct pieces: `/agentic-sdd-flow:dotnet-code-review`, the `tests-writer` agent,
 `Workflow({ name: 'agentic-sdd-flow:dotnet-sdd', args: { project, projectDir, plan, taskKey } })`.
 On the architectural path the entry point can run `architecture-design` first (drivers → current C4 → three lens proposals → judge panel → threat model → data review; ADRs + spec after you approve). Every design artifact carries its diagrams as Mermaid fences (`skills/architecture-design/references/sketch-conventions.md`), so a sketch is reviewable text in the merge request and importable into FigJam later. Direct call: `Workflow({ name: 'agentic-sdd-flow:architecture-design', args: { brief, projects, workDir, adrDir, specsDir, slug } })`.
 
+Every stage has its own reviewer, and the author never reviews its own work: `design-reviewer`
+verdicts the decision table after the judge panel (Design review) and the written spec after the
+ADRs (Spec review, one fix pass by the spec author, scoped re-review); `plan-reviewer` gates the plan
+inside `dotnet-sdd` before the first implementer run (Plan review — a critical or important finding
+returns `status: plan_rejected` with the findings as open questions, the author fixes the plan and
+reruns with `resumeFromRunId`); `code-reviewer` reviews every task and the whole branch, with
+`findings-verifier` filtering noise before the fix loop. All three return the same verdict shape:
+`approved`, severity-ranked `findings` with stable ids, and a scoped re-review on the next round.
+
 When something does not work, the `debugger` agent runs before anyone changes code: it reproduces
 the symptom, tests one hypothesis at a time with Roslyn, writes a regression test and a diagnosis
 file, and returns a fix brief that `dotnet-implementer` executes. The `dotnet-sdd` workflow dispatches
@@ -123,7 +132,7 @@ updating the plugin.
 
 ## Agents
 
-Workflow agents: `dotnet-implementer`, `findings-verifier`, `code-reviewer`, `tests-writer`, `debugger`, `design-simplicity`, `design-scalability`, `design-boundaries`, `design-judge`.
+Workflow agents: `dotnet-implementer`, `findings-verifier`, `code-reviewer`, `plan-reviewer`, `design-reviewer`, `tests-writer`, `debugger`, `design-simplicity`, `design-scalability`, `design-boundaries`, `design-judge`.
 Specialists: `dotnet-architect`, `api-designer`, `grpc-contracts`, `ef-core-specialist`, `postgres-specialist`, `tsql-specialist`, `migration-reviewer`, `security-auditor`, `performance-analyst`, `concurrency-specialist`, `devops-engineer`, `build-error-resolver`, `refactor-cleaner`, `test-quality-auditor`, `docs-sync`.
 All resolve as `agentic-sdd-flow:<name>` and none can dispatch other agents. Specialists end with a Hand-offs section using the keys listed under *Company overlay*; workflow agents return JSON instead.
 
