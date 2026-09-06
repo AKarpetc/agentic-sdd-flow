@@ -260,8 +260,8 @@ class WorkDistribution(unittest.TestCase):
 
     EXPECTED = {
         "dotnet-sdd.js": {
-            "Analyze": set(), "Implement": {"implementer"}, "Tests": {"tests"}, "Review": {"reviewer"},
-            "Verify": {"verifier"}, "Fix": {"implementer"}, "Final review": {"reviewer"},
+            "Analyze": set(), "Implement": {"implementer"}, "Tests": {"tests"}, "Debug": {"debugger"},
+            "Review": {"reviewer"}, "Verify": {"verifier"}, "Fix": {"implementer"}, "Final review": {"reviewer"},
         },
         "architecture-design.js": {
             "Drivers": set(), "Context": set(), "Proposals": {"simplicity", "scalability", "boundaries"},
@@ -302,6 +302,14 @@ class WorkDistribution(unittest.TestCase):
         self.assertNotIn("reviewer", found["Implement"]["agents"] | found["Fix"]["agents"])
         self.assertNotIn("implementer", found["Review"]["agents"] | found["Final review"]["agents"])
         self.assertIn("agentType: AGENT.verifier", text)
+
+    def test_debugger_diagnoses_but_never_fixes(self):
+        text = read(os.path.join(ROOT, "workflows", "dotnet-sdd.js"))
+        found = self.segments(text)
+        self.assertEqual(found["Debug"]["agents"], {"debugger"})
+        self.assertNotIn("debugger", found["Fix"]["agents"] | found["Implement"]["agents"])
+        fields, _ = frontmatter(os.path.join(ROOT, "agents", "debugger.md"))
+        self.assertNotIn("Edit", {t.strip() for t in fields["tools"].split(",")})
 
     def test_meta_phases_match_the_dispatched_phases(self):
         for name in self.EXPECTED:

@@ -6,6 +6,7 @@ export const meta = {
     { title: 'Analyze', detail: 'split the plan into task briefs' },
     { title: 'Implement' },
     { title: 'Tests' },
+    { title: 'Debug', detail: 'debugger finds the root cause before another fix' },
     { title: 'Review' },
     { title: 'Verify', detail: 'findings-verifier filters noise' },
     { title: 'Fix' },
@@ -20,6 +21,7 @@ const AGENT = {
   tests: PREFIX + 'tests-writer',
   reviewer: PREFIX + 'code-reviewer',
   verifier: PREFIX + 'findings-verifier',
+  debugger: PREFIX + 'debugger',
 }
 // The default workflow agent does not receive the injected contract, so every prompt asks for it explicitly.
 const RULES_PREAMBLE = 'Read the plugin rules contract (rules/RULES-CONTRACT.md under the agentic-sdd-flow plugin root, or the <rules-contract> block already in your context) before anything else.\n'
@@ -82,6 +84,19 @@ const VERIFY = {
   },
 }
 const SHA = { type: 'object', required: ['sha'], properties: { sha: { type: 'string' } } }
+const DIAGNOSIS = {
+  type: 'object', required: ['rootCause', 'confidence', 'evidence', 'fixBrief', 'files', 'verification'],
+  properties: {
+    rootCause: { type: 'string' },
+    confidence: { enum: ['high', 'medium', 'low'] },
+    evidence: { type: 'string' },
+    fixBrief: { type: 'string' },
+    files: { type: 'array', items: { type: 'string' } },
+    reproduction: { type: 'string' },
+    verification: { type: 'string' },
+    ruledOut: { type: 'array', items: { type: 'string' } },
+  },
+}
 const TESTS_DONE = {
   type: 'object', required: ['status', 'summary'],
   properties: { status: { enum: ['done', 'done_with_concerns', 'blocked'] }, summary: { type: 'string' } },
@@ -148,11 +163,31 @@ for (const t of tasks) {
   }
   if (report.status === 'done_with_concerns') rulings.push({ task: t.id, status: 'done_with_concerns', concerns: report.concerns })
 
+  const testsPrompt = (extra) => `${RULES_PREAMBLE}Working directory: ${projectDir}. Project: ${project}. Cover the changes of task ${t.id} (${t.title}; files: ${t.files.join(', ')})
+     with tests per the test conventions, run them, and commit as "${taskKey}: Add tests for ${t.title}". Return status and the literal Passed/Failed/Skipped line. ${extra}`
   phase('Tests')
-  const tests = await agent(
-    `${RULES_PREAMBLE}Working directory: ${projectDir}. Project: ${project}. Cover the changes of task ${t.id} (${t.title}; files: ${t.files.join(', ')})
-     with tests per the test conventions, run them, and commit as "${taskKey}: Add tests for ${t.title}". Return status and the literal Passed/Failed/Skipped line.`,
-    { agentType: AGENT.tests, schema: TESTS_DONE, label: `tests#${t.id}` })
+  let tests = await agent(testsPrompt(''), { agentType: AGENT.tests, schema: TESTS_DONE, label: `tests#${t.id}` })
+  if (!tests || tests.status !== 'done') {
+    // Red tests are a symptom, not a task: diagnose to root cause, then hand the fix to the implementer once.
+    phase('Debug')
+    const diagnosis = await agent(
+      `${RULES_PREAMBLE}Working directory: ${projectDir}. Project: ${project}. Task ${t.id}: ${t.title}. Brief: ${t.briefPath}. Implementer report: ${report.reportPath}.
+       The tests-writer could not get the tests green: ${tests ? tests.summary : 'no report'}. Diagnose to root cause per your agent instructions, write ${projectDir}/.superpowers/sdd/task-${t.id}-diagnosis.md and return the DIAGNOSIS JSON.`,
+      { agentType: AGENT.debugger, schema: DIAGNOSIS, label: `debug#${t.id}` })
+    if (diagnosis && diagnosis.confidence !== 'low') {
+      phase('Fix')
+      const repair = await agent(
+        `${RULES_PREAMBLE}Working directory: ${projectDir}. Project: ${project}. Task key: ${taskKey}. Task ${t.id}: ${t.title}. Brief: ${t.briefPath}.
+         Repair after diagnosis. Root cause: ${diagnosis.rootCause}. Fix brief: ${diagnosis.fixBrief}. Files: ${diagnosis.files.join(', ')}. Verify with: ${diagnosis.verification}${diagnosis.reproduction ? ' (reproduction test: ' + diagnosis.reproduction + ' — keep it, it must pass)' : ''}.
+         Commit as "${taskKey}: Fix ${t.title} after diagnosis".`,
+        { agentType: AGENT.implementer, schema: REPORT, label: `repair#${t.id}` })
+      if (repair && repair.commits) report.commits.push(...repair.commits)
+      phase('Tests')
+      tests = await agent(testsPrompt(`A diagnosis-driven repair was just committed (${diagnosis.fixBrief}); re-run the suite and fill remaining gaps.`),
+        { agentType: AGENT.tests, schema: TESTS_DONE, label: `tests#${t.id}.retry` })
+    }
+    rulings.push({ task: t.id, stage: 'debug', rootCause: diagnosis ? diagnosis.rootCause : 'debugger returned nothing', confidence: diagnosis ? diagnosis.confidence : 'none', testsAfter: tests ? tests.status : 'no_report' })
+  }
   if (!tests || tests.status !== 'done') rulings.push({ task: t.id, stage: 'tests', status: tests ? tests.status : 'no_report', note: tests ? tests.summary : 'tests-writer returned nothing' })
 
   let feedback = []
@@ -197,6 +232,20 @@ for (const t of tasks) {
     stalled = feedback.length && closed === 0 ? stalled + 1 : 0
     if (stalled >= stallRounds) { rulings.push({ task: t.id, status: 'unstable', stalled: blocking }); log(`task ${t.id}: ${stallRounds} rounds without progress, stopping`); break }
 
+    let diagnosisNote = ''
+    if (stalled >= 1) {
+      // A round that closed nothing means the implementer is fixing the wrong thing: diagnose before trying again.
+      phase('Debug')
+      const diagnosis = await agent(
+        `${RULES_PREAMBLE}Working directory: ${projectDir}. Project: ${project}. Task ${t.id}: ${t.title}. Brief: ${t.briefPath}. Implementer report: ${report.reportPath}.
+         The last fix round closed none of these review findings:\n${blocking.map(f => '- [' + f.id + '] ' + f.file + (f.line ? ':' + f.line : '') + ' — ' + f.issue).join('\n')}
+         Find out why (wrong root cause, wrong file, a test pinning the old behaviour, a finding that is not real) per your agent instructions, write ${projectDir}/.superpowers/sdd/task-${t.id}-r${round}-diagnosis.md and return the DIAGNOSIS JSON.`,
+        { agentType: AGENT.debugger, schema: DIAGNOSIS, label: `debug#${t.id}.${round}` })
+      if (diagnosis) {
+        diagnosisNote = `Diagnosis (${diagnosis.confidence}): ${diagnosis.rootCause}. Fix brief: ${diagnosis.fixBrief}. Verify with: ${diagnosis.verification}.`
+        rulings.push({ task: t.id, stage: 'debug', round, rootCause: diagnosis.rootCause, confidence: diagnosis.confidence })
+      }
+    }
     phase('Fix')
     feedback = blocking
     rounds = round + 1
@@ -204,6 +253,7 @@ for (const t of tasks) {
     const fix = await agent(
       `${RULES_PREAMBLE}Working directory: ${projectDir}. Project: ${project}. Task key: ${taskKey}. Task ${t.id}: ${t.title}. Brief: ${t.briefPath}.
        Fix round ${rounds}. Read your report file ${report.reportPath} first, then address exactly these findings:\n${blocking.map(f => '- [' + f.id + '] ' + f.file + (f.line ? ':' + f.line : '') + ' — ' + f.issue).join('\n')}
+       ${diagnosisNote}
        Re-run the tests that cover the changed files. Commit as "${taskKey}: Address review findings for ${t.title}".
        ${escalate ? 'Previous rounds did not close these findings; read what was tried in the report and take a different approach.' : ''}`,
       { agentType: AGENT.implementer, schema: REPORT, label: `fix#${t.id}.${rounds}`, effort: escalate ? 'high' : undefined })

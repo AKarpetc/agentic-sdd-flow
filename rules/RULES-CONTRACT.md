@@ -106,6 +106,7 @@ Dispatch order — stop at the first match:
 
 | The job | Agent |
 |---|---|
+| Something does not work: a failing or flaky test, a wrong result, a runtime exception, a fix round that closed nothing | `debugger` first — it returns the root cause and a fix brief; the fix then goes to `dotnet-implementer` |
 | Broken build after a refactor or package bump | `build-error-resolver` |
 | DbContext, LINQ, EF migrations, N+1, slow EF query | `ef-core-specialist` |
 | Slow endpoint, allocations, caching, DI lifetimes | `performance-analyst` |

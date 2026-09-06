@@ -192,6 +192,27 @@
           "regex": "class\\s+PricingService\\s*\\("
         }
       ]
+    },
+    {
+      "name": "debug-failure",
+      "prompt": "OrderService.CanCancelAsync returns true for a Shipped order in production, yet nobody can say why. Find the root cause before anyone changes code.",
+      "max_turns": 6,
+      "expect_any": [
+        {
+          "tool": "Agent",
+          "input": "agentic-sdd-flow:debugger"
+        }
+      ],
+      "forbid": [
+        {
+          "tool": "Edit",
+          "input": "\\.cs"
+        },
+        {
+          "tool": "Write",
+          "input": "\\.cs"
+        }
+      ]
     }
   ]
 }

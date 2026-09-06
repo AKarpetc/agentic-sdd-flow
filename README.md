@@ -112,12 +112,18 @@ Direct pieces: `/agentic-sdd-flow:dotnet-code-review`, the `tests-writer` agent,
 `Workflow({ name: 'agentic-sdd-flow:dotnet-sdd', args: { project, projectDir, plan, taskKey } })`.
 On the architectural path the entry point can run `architecture-design` first (drivers → current C4 → three lens proposals → judge panel → threat model → data review; ADRs + spec after you approve). Every design artifact carries its diagrams as Mermaid fences (`skills/architecture-design/references/sketch-conventions.md`), so a sketch is reviewable text in the merge request and importable into FigJam later. Direct call: `Workflow({ name: 'agentic-sdd-flow:architecture-design', args: { brief, projects, workDir, adrDir, specsDir, slug } })`.
 
+When something does not work, the `debugger` agent runs before anyone changes code: it reproduces
+the symptom, tests one hypothesis at a time with Roslyn, writes a regression test and a diagnosis
+file, and returns a fix brief that `dotnet-implementer` executes. The `dotnet-sdd` workflow dispatches
+it on its own in two places — when `tests-writer` cannot get the tests green (Debug → Fix → Tests
+once more) and when a review fix round closes nothing (Debug before the next Fix).
+
 Plugin agents and workflows register at session start: restart Claude Code after installing or
 updating the plugin.
 
 ## Agents
 
-Workflow agents: `dotnet-implementer`, `findings-verifier`, `code-reviewer`, `tests-writer`, `design-simplicity`, `design-scalability`, `design-boundaries`, `design-judge`.
+Workflow agents: `dotnet-implementer`, `findings-verifier`, `code-reviewer`, `tests-writer`, `debugger`, `design-simplicity`, `design-scalability`, `design-boundaries`, `design-judge`.
 Specialists: `dotnet-architect`, `api-designer`, `grpc-contracts`, `ef-core-specialist`, `postgres-specialist`, `tsql-specialist`, `migration-reviewer`, `security-auditor`, `performance-analyst`, `concurrency-specialist`, `devops-engineer`, `build-error-resolver`, `refactor-cleaner`, `test-quality-auditor`, `docs-sync`.
 All resolve as `agentic-sdd-flow:<name>` and none can dispatch other agents. Specialists end with a Hand-offs section using the keys listed under *Company overlay*; workflow agents return JSON instead.
 
