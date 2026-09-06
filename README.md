@@ -107,6 +107,20 @@ Notes on the pins:
 - The SQL Server server writes an audit log to `logs/audit.jsonl` under the working directory. Set `AUDIT_LOGGING=false` or `AUDIT_LOG_PATH` to move or silence it.
 - A repository that never uses them can leave the `ASF_*` variables unset (the servers fail closed) or remove the two entries from its own `.mcp.json` override.
 
+## Tests
+
+```
+python3 -m unittest discover -s tests -v
+shellcheck -x -P SCRIPTDIR bin/*.sh
+```
+
+Standard-library `unittest` only (Python ≥ 3.9). `tests/` covers the write gate rule by rule and
+end-to-end through stdin (including the committed-baseline diff and `checks` re-tiering), the
+three injection modes and the navigator version note, the config loader, the Roslyn resolver /
+pin / launcher scripts against a fixture repository, and a structural lint: manifests, hooks,
+MCP entries, agent and skill frontmatter, navigator tool names, hand-off keys, README check ids,
+relative links and the workflow scripts. `.github/workflows/tests.yml` runs the same on push.
+
 ## Runtime notes
 
 - Local-path marketplace install: OK (`claude plugin marketplace add <path>` + `claude plugin install agentic-sdd-flow@agentic-sdd-flow`).

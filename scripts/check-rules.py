@@ -293,7 +293,7 @@ def main():
         sys.stderr.write("\n".join(lines) + "\n")
         return 2
 
-    notes = "; ".join(f"{name}:{number} {message}" for _, number, message in advisory)
+    notes = "; ".join(f"{name}:{number} [{rule}] {message}" for rule, number, message in advisory)
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "PostToolUse",
         "additionalContext": f"Conventions — advisory on {name}: {notes}",
