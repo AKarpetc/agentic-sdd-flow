@@ -17,7 +17,15 @@ the recommended option at every gate, commit on `main`, never push, end with `ST
 the same task brief, and one arm-specific "process for this run" line from `tasks/arms.json`.
 Sessions are headless `claude -p` with `--permission-mode acceptEdits`, `--max-turns 120` and a
 90-minute wall clock. Every event is streamed to disk with an arrival timestamp so stage timing can be
-reconstructed for either arm.
+reconstructed for either arm. Three runner details come from the first measurement
+(`results/bench-2026-09-06/report.md`): the prompt is passed on **stdin**, not argv — with it in argv every
+session's command line contains `Orders.Api`, and a neighbouring session's `pkill -f "Orders.Api"` after a
+smoke test SIGTERMs the whole session (exit 143) and aborts its background workflow, which is how four
+plugin-arm runs died; `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0` lifts the headless 10-minute idle ceiling
+on background workflows; and the checker forces `DOTNET_CLI_UI_LANGUAGE=en`, because a localized SDK prints
+a test summary the parser cannot read. Sessions of both arms still share one machine, so a `pkill` by
+project name in one arm can still hit the other arm's `dotnet` build, test or smoke server — run with
+`--workers 1` when that must not happen.
 
 ## The tasks (`tasks/T1.md`, `T2.md`, `T3.md`)
 

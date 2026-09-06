@@ -51,16 +51,41 @@ def prepare_workspace(root, name):
     return workspace
 
 
-def run_session(prompt, workspace, arm, stream_path, timeout, max_turns):
-    command = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose", "--max-turns", str(max_turns),
+def session_env():
+    """Environment for a headless session: not nested in a Claude Code session, and no idle ceiling on background work.
+
+    `claude -p` keeps running while a background Workflow or Agent is alive, but by default gives up after
+    10 minutes of "idle waiting" (CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS) and aborts the work — the plugin arm's
+    dotnet-sdd workflow was killed mid-agent that way. The runner's own --timeout still bounds the session.
+    """
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    env.setdefault("CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS", "0")
+    return env
+
+
+def session_command(arm, max_turns):
+    """`claude -p` argv without the prompt: the prompt goes in on stdin.
+
+    With the prompt in argv, every session's command line contains the fixture's project name, and a
+    neighbouring session's `pkill -f "Orders.Api"` after a smoke test SIGTERMs this session too (exit 143,
+    the background workflow aborted mid-agent) — that is how four plugin-arm runs died in the first measurement.
+    """
+    command = ["claude", "-p", "--output-format", "stream-json", "--verbose", "--max-turns", str(max_turns),
                "--no-session-persistence", "--permission-mode", "acceptEdits", "--allowedTools", *TOOLS]
     if arm.get("settings"):
         command += ["--settings", json.dumps(arm["settings"])]
-    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    return command
+
+
+def run_session(prompt, workspace, arm, stream_path, timeout, max_turns):
+    command = session_command(arm, max_turns)
+    env = session_env()
     started = time.time()
     timed_out = False
     with open(stream_path, "w", encoding="utf-8") as stream, open(stream_path + ".stderr", "w", encoding="utf-8") as errors:
-        proc = subprocess.Popen(command, cwd=workspace, env=env, stdout=subprocess.PIPE, stderr=errors, text=True)
+        proc = subprocess.Popen(command, cwd=workspace, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=errors, text=True)
+        proc.stdin.write(prompt)
+        proc.stdin.close()
         try:
             for line in proc.stdout:  # arrival time per event: the stream carries none of its own
                 stream.write(json.dumps({"t": round(time.time() - started, 2)}) + "\t" + line.rstrip("\n") + "\n")
@@ -84,6 +109,7 @@ def parse_stream(stream_path):
         except (ValueError, KeyError):
             continue
     result, top_calls, nested_calls, dispatches, final_text = {}, {}, {}, [], ""
+    segments = []  # one `result` event per time the model yielded; the session resumes when a background task reports
     agents = {}  # tool_use_id -> {type, description, start, last, tools}
     for t, ev in events:
         kind = ev.get("type")
@@ -107,10 +133,12 @@ def parse_stream(stream_path):
                     final_text = block.get("text", "")
         elif kind == "result":
             result = ev
+            segments.append(ev.get("num_turns") or 0)
     usage = result.get("usage", {})
     status = re.search(r"STATUS:\s*(\w+)", final_text)
     return {
-        "subtype": result.get("subtype"), "turns": result.get("num_turns"), "costUsd": result.get("total_cost_usd"),
+        "subtype": result.get("subtype"), "turns": sum(segments) or result.get("num_turns"), "segments": len(segments),
+        "costUsd": result.get("total_cost_usd"),
         "tokens": {"input": usage.get("input_tokens"), "output": usage.get("output_tokens"),
                    "cacheRead": usage.get("cache_read_input_tokens"), "cacheCreation": usage.get("cache_creation_input_tokens")},
         "durationApiMs": result.get("duration_api_ms"), "modelUsage": result.get("modelUsage"),
@@ -167,12 +195,13 @@ def main():
     parser.add_argument("--timeout", type=int, default=5400)
     parser.add_argument("--max-turns", type=int, default=120)
     parser.add_argument("--workers", type=int, default=2)
+    parser.add_argument("--port-base", type=int, default=5200, help="first acceptance port; give each concurrent runner its own range")
     args = parser.parse_args()
     arms = json.load(open(os.path.join(TASKS, "arms.json")))
     selected = [(t, a) for t in args.task for a in (args.arm or list(arms))]
     os.makedirs(args.out, exist_ok=True)
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = [pool.submit(run_pair, t, a, arms[a], args.out, args.timeout, args.max_turns, 5200 + i) for i, (t, a) in enumerate(selected)]
+        futures = [pool.submit(run_pair, t, a, arms[a], args.out, args.timeout, args.max_turns, args.port_base + i) for i, (t, a) in enumerate(selected)]
         for future in concurrent.futures.as_completed(futures):
             try:
                 future.result()

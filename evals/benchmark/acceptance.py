@@ -10,6 +10,7 @@ import glob
 import json
 import os
 import re
+import signal
 import socket
 import subprocess
 import sys
@@ -26,7 +27,9 @@ spec = importlib.util.spec_from_file_location("check_rules", os.path.join(PLUGIN
 check_rules = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(check_rules)
 
-ENV = dict(os.environ, DOTNET_CLI_TELEMETRY_OPTOUT="1", DOTNET_NOLOGO="1", ASPNETCORE_ENVIRONMENT="Development")
+ENV = dict(os.environ, DOTNET_CLI_TELEMETRY_OPTOUT="1", DOTNET_NOLOGO="1", ASPNETCORE_ENVIRONMENT="Development",
+           DOTNET_CLI_UI_LANGUAGE="en")  # the test summary is parsed; a localized SDK prints "Пройдено!" instead of "Passed!"
+SUMMARY = re.compile(r"(?:Passed|Failed)!\s+-\s+Failed:\s+(\d+),\s+Passed:\s+(\d+),\s+Skipped:\s+(\d+),\s+Total:\s+(\d+)")
 
 
 def sh(args, cwd, timeout=600):
@@ -42,9 +45,10 @@ def build(workspace):
 
 def tests(workspace):
     code, out = sh(["dotnet", "test", "Orders.slnx", "-nologo", "-v", "q", "--no-build"], workspace, timeout=900)
-    passed = sum(int(n) for n in re.findall(r"Passed!\s+-\s+Failed:\s+\d+,\s+Passed:\s+(\d+)", out))
-    failed = sum(int(n) for n in re.findall(r"Failed:\s+(\d+),\s+Passed:", out))
-    total = sum(int(n) for n in re.findall(r"Total:\s+(\d+)", out))
+    summaries = [tuple(int(n) for n in m) for m in SUMMARY.findall(out)]  # one line per test assembly
+    failed = sum(s[0] for s in summaries)
+    passed = sum(s[1] for s in summaries)
+    total = sum(s[3] for s in summaries)
     if total == 0:  # newer test SDK output
         passed = sum(int(n) for n in re.findall(r"Passed:\s+(\d+)", out))
         failed = sum(int(n) for n in re.findall(r"Failed:\s+(\d+)", out))
@@ -75,8 +79,10 @@ def http(method, url, body=None):
 
 
 def run_api(workspace, port):
+    # Own process group: `dotnet run` spawns the API as a child that outlives a plain kill of the parent,
+    # and a leaked API would answer the next run's acceptance client on the same port.
     proc = subprocess.Popen(["dotnet", "run", "--project", "src/Orders.Api", "--no-build", "--urls", f"http://127.0.0.1:{port}"],
-                            cwd=workspace, env=ENV, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            cwd=workspace, env=ENV, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     deadline = time.time() + 60
     while time.time() < deadline:
         if http("GET", f"http://127.0.0.1:{port}/")[0] != 0:
@@ -84,8 +90,16 @@ def run_api(workspace, port):
         if proc.poll() is not None:
             break
         time.sleep(0.5)
-    proc.kill()
+    stop_api(proc)
     return None
+
+
+def stop_api(proc):
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    proc.wait(timeout=30)
 
 
 def near(a, b):
@@ -193,7 +207,7 @@ def main():
             try:
                 checks = ACCEPTANCE[args.task](f"http://127.0.0.1:{args.port}")
             finally:
-                api.kill()
+                stop_api(api)
     result["acceptance"] = {"passed": sum(c["ok"] for c in checks), "total": len(checks) or len(ACCEPTANCE[args.task]("http://127.0.0.1:1")), "checks": checks}
     result["plantedBugFixed"] = any(c["ok"] and c["name"] == PLANTED[args.task] for c in checks)
     result["conventions"] = conventions(args.workspace)

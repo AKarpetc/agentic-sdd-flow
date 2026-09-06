@@ -57,6 +57,31 @@ class Benchmark(unittest.TestCase):
         self.assertIn("return page * size;", paging, "T3 planted bug: 0-based skip for 1-based pages")
         self.assertIn("api.nuget.org", open(os.path.join(BENCH, "fixture", "nuget.config"), encoding="utf-8").read())
 
+    def test_runner_lifts_the_headless_idle_ceiling(self):
+        run = load("run")
+        env = run.session_env()
+        self.assertEqual(env.get("CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS"), "0", "claude -p aborts a background Workflow after 10 idle minutes otherwise")
+        self.assertNotIn("CLAUDECODE", env)
+
+    def test_runner_keeps_the_prompt_out_of_argv(self):
+        run = load("run")
+        arms = json.load(open(os.path.join(BENCH, "tasks", "arms.json")))
+        for arm in arms.values():
+            command = run.session_command(arm, 120)
+            self.assertEqual(command[:2], ["claude", "-p"])
+            self.assertFalse(any("Orders.Api" in part for part in command), "a neighbour's pkill -f by project name would SIGTERM the session")
+
+    def test_checker_parses_the_vstest_summary_in_english_only(self):
+        acceptance = load("acceptance")
+        self.assertEqual(acceptance.ENV.get("DOTNET_CLI_UI_LANGUAGE"), "en", "a localized SDK prints 'Пройдено!' and the summary regex misses it")
+        mixed = "Failed!  - Failed:     1, Passed:     5, Skipped:     0, Total:     6, Duration: 2 ms - A.dll (net8.0)\n" \
+                "Passed!  - Failed:     0, Passed:     3, Skipped:     1, Total:     4, Duration: 2 ms - B.dll (net8.0)\n"
+        summaries = [tuple(int(n) for n in m) for m in acceptance.SUMMARY.findall(mixed)]
+        self.assertEqual([s[1] for s in summaries], [5, 3], "passed must be counted on failing runs too")
+        self.assertEqual(sum(s[0] for s in summaries), 1)
+        self.assertEqual(sum(s[3] for s in summaries), 10)
+        self.assertEqual(acceptance.SUMMARY.findall("Не пройден!: не пройдено 1, пройдено 1, всего 2"), [])
+
     def test_checker_covers_every_task(self):
         acceptance = load("acceptance")
         self.assertEqual(set(acceptance.ACCEPTANCE), {"T1", "T2", "T3"})

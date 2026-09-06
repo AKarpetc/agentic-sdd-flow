@@ -7,3 +7,4 @@ evals/fixtures/**/bin/
 evals/fixtures/**/obj/
 evals/benchmark/fixture/**/bin/
 evals/benchmark/fixture/**/obj/
+results/**/T?-*/

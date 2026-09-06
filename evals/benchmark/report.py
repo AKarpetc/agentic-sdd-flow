@@ -47,6 +47,13 @@ def table(headers, rows):
     return "\n".join(out)
 
 
+def model_cost(m):
+    """Sum of per-model costs; `total_cost_usd` under-counts sessions whose agents ran in a Workflow."""
+    usage = m.get("modelUsage") or {}
+    costs = [v.get("costUSD") for v in usage.values() if isinstance(v, dict) and isinstance(v.get("costUSD"), (int, float))]
+    return sum(costs) if costs else None
+
+
 def outcome_row(r):
     m, a = r["metrics"], r.get("acceptance", {})
     acc = a.get("acceptance", {})
@@ -56,8 +63,9 @@ def outcome_row(r):
     agents = m.get("pulse") or m.get("agents") or []
     return [
         r["label"],
-        (m.get("reportedStatus") or m.get("subtype") or "–") + (" ⏱timeout" if r["session"].get("timedOut") else ""),
-        minutes(r["session"].get("wallSeconds")), money(m.get("costUsd")), tokens(m), m.get("turns") or "–",
+        (m.get("reportedStatus") or m.get("subtype") or "–") + (" ⏱timeout" if r["session"].get("timedOut") else "")
+        + (" ☠SIGTERM" if r["session"].get("exit") == 143 else ""),
+        minutes(r["session"].get("wallSeconds")), money(m.get("costUsd")), money(model_cost(m)), tokens(m), m.get("turns") or "–",
         len(r.get("pulse") or []) or sum(1 for d in m.get("dispatches", []) if d["tool"] == "Agent"),
         sum((m.get("topLevelTools") or {}).values()) + sum((m.get("nestedTools") or {}).values()),
         "✅" if a.get("build", {}).get("ok") else "❌",
@@ -88,13 +96,14 @@ def main():
     for r in rows:
         by_task[r["task"]].append(r)
     out = ["# Benchmark: superpowers alone vs agentic-sdd-flow", ""]
-    headers = ["arm", "status", "wall", "cost", "tokens", "turns", "agents", "tool calls", "build", "own tests", "acceptance", "planted bug", "Δ violations", "commits"]
-    totals = defaultdict(lambda: {"cost": 0.0, "wall": 0.0, "acc": 0, "acc_total": 0, "bugs": 0, "n": 0})
+    headers = ["arm", "status", "wall", "cost", "Σ model cost", "tokens", "turns", "agents", "tool calls", "build", "own tests", "acceptance", "planted bug", "Δ violations", "commits"]
+    totals = defaultdict(lambda: {"cost": 0.0, "model_cost": 0.0, "wall": 0.0, "acc": 0, "acc_total": 0, "bugs": 0, "n": 0})
     for task in sorted(by_task):
         out += ["## %s" % task, "", table(headers, [outcome_row(r) for r in sorted(by_task[task], key=lambda r: r["arm"])]), ""]
         for r in sorted(by_task[task], key=lambda r: r["arm"]):
             t = totals[r["arm"]]
             t["cost"] += r["metrics"].get("costUsd") or 0
+            t["model_cost"] += model_cost(r["metrics"]) or 0
             t["wall"] += r["session"].get("wallSeconds") or 0
             acc = r.get("acceptance", {}).get("acceptance", {})
             t["acc"] += acc.get("passed", 0) or 0
@@ -108,9 +117,10 @@ def main():
             failed = [c for c in r.get("acceptance", {}).get("acceptance", {}).get("checks", []) if not c["ok"]]
             if failed:
                 out += ["Failed acceptance checks:", ""] + ["- %s — %s" % (c["name"], c["detail"][:140]) for c in failed] + [""]
-    out += ["## Totals", "", table(["arm", "runs", "cost", "wall", "acceptance", "planted bugs fixed"],
-                                    [[arm, t["n"], money(t["cost"]), minutes(t["wall"]), "%d/%d" % (t["acc"], t["acc_total"]), "%d/%d" % (t["bugs"], t["n"])] for arm, t in sorted(totals.items())]), ""]
-    out += ["Δ violations = blocking convention violations in the final tree minus the %d the fixture already carries. Acceptance = hidden HTTP checks against `dotnet run`. Stage minutes are arrival times of top-level Skill/Agent/Workflow dispatches; agent times come from the plugin's pulse (plugin arm) or nested tool events (baseline)." % FIXTURE_BLOCKING]
+    out += ["## Totals", "", table(["arm", "runs", "cost", "Σ model cost", "wall", "acceptance", "planted bugs fixed", "Σ model cost per passed check"],
+                                    [[arm, t["n"], money(t["cost"]), money(t["model_cost"]), minutes(t["wall"]), "%d/%d" % (t["acc"], t["acc_total"]), "%d/%d" % (t["bugs"], t["n"]),
+                                      money(t["model_cost"] / t["acc"]) if t["acc"] else "–"] for arm, t in sorted(totals.items())]), ""]
+    out += ["Δ violations = blocking convention violations in the final tree minus the %d the fixture already carries. Acceptance = hidden HTTP checks against `dotnet run`. Stage minutes are arrival times of top-level Skill/Agent/Workflow dispatches; agent times come from the plugin's pulse (plugin arm) or nested tool events (baseline). cost = the CLI's `total_cost_usd`; Σ model cost = the sum of `modelUsage[*].costUSD`, which also counts agents that ran inside a Workflow." % FIXTURE_BLOCKING]
     print("\n".join(out))
 
 
