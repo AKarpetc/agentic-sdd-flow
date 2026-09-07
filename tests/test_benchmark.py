@@ -31,7 +31,7 @@ class Benchmark(unittest.TestCase):
     def test_manifest_covers_every_class_and_agrees_with_the_files(self):
         classes = {meta["class"] for meta in MANIFEST.values()}
         self.assertEqual(classes, {"simple", "medium", "complex", "vague", "conflict"}, "the suite must span the whole size range and the conflict class")
-        self.assertTrue({meta["expectedTier"] for meta in MANIFEST.values()} <= {"quick", "light", "standard", "deep"})
+        self.assertTrue({meta["expectedTier"] for meta in MANIFEST.values()} <= {"quick", "mix", "light", "standard", "deep"})
         keys = [meta["key"] for meta in MANIFEST.values()]
         self.assertEqual(len(keys), len(set(keys)), "task keys must be unique: git hygiene is scored per key")
         files = {os.path.basename(p)[:-3] for p in glob.glob(os.path.join(BENCH, "tasks", "T*.md"))}

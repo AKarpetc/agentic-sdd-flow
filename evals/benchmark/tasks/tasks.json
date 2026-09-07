@@ -2,19 +2,19 @@
   "T1": {
     "key": "ORD-42",
     "class": "medium",
-    "expectedTier": "light",
+    "expectedTier": "quick",
     "summary": "one read endpoint through the service layer"
   },
   "T2": {
     "key": "ORD-43",
     "class": "medium",
-    "expectedTier": "standard",
+    "expectedTier": "mix",
     "summary": "state change, ProblemDetails, an outbox others read"
   },
   "T3": {
     "key": "ORD-44",
     "class": "medium",
-    "expectedTier": "light",
+    "expectedTier": "quick",
     "summary": "paging with validation through existing arithmetic"
   },
   "T4": {
@@ -32,7 +32,7 @@
   "T6": {
     "key": "ORD-47",
     "class": "complex",
-    "expectedTier": "standard",
+    "expectedTier": "mix",
     "summary": "transition state machine, idempotency, audit history, one rule source"
   },
   "T7": {
@@ -44,7 +44,7 @@
   "T8": {
     "key": "ORD-49",
     "class": "conflict",
-    "expectedTier": "light",
+    "expectedTier": "mix",
     "overlay": "T8.overlay",
     "truth": "brief",
     "summary": "brief says non-cancelled, code counts all; docs, CHANGELOG, CI smoke, consumer note and XML doc all back the brief \u2014 the code drifted"
@@ -52,7 +52,7 @@
   "T9": {
     "key": "ORD-50",
     "class": "conflict",
-    "expectedTier": "light",
+    "expectedTier": "mix",
     "overlay": "T9.overlay",
     "truth": "code",
     "summary": "brief says non-cancelled, code counts all; ADR-0003, docs, CHANGELOG, CI smoke, consumer note and XML doc all back the code \u2014 the brief is wrong"
