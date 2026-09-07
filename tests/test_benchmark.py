@@ -82,10 +82,14 @@ class Benchmark(unittest.TestCase):
         run = load("run")
         self.assertEqual(run.route_taken([]), "quick")
         self.assertEqual(run.route_taken([{"tool": "Agent", "label": "agentic-sdd-flow:tests-writer"}]), "quick")
-        self.assertEqual(run.route_taken([{"tool": "Workflow", "label": "agentic-sdd-flow:dotnet-sdd", "mode": "light"}]), "light")
-        self.assertEqual(run.route_taken([{"tool": "Workflow", "label": "agentic-sdd-flow:dotnet-sdd"}]), "standard")
-        self.assertEqual(run.route_taken([{"tool": "Workflow", "label": "agentic-sdd-flow:architecture-design"},
-                                          {"tool": "Workflow", "label": "agentic-sdd-flow:dotnet-sdd"}]), "deep")
+        self.assertEqual(run.route_taken([{"tool": "Workflow", "label": "agentic-sdd-flow:dotnet-sdd", "mode": "light", "t": 9}]), "light")
+        self.assertEqual(run.route_taken([{"tool": "Workflow", "label": "agentic-sdd-flow:dotnet-sdd", "t": 9}]), "standard")
+        self.assertEqual(run.route_taken([{"tool": "Workflow", "label": "agentic-sdd-flow:dotnet-sdd", "mode": "review", "t": 9}]), "mix")
+        self.assertEqual(run.route_taken([{"tool": "Skill", "label": "superpowers:test-driven-development", "t": 2},
+                                          {"tool": "Workflow", "label": "agentic-sdd-flow:dotnet-sdd", "t": 9}]), "mix",
+                         "superpowers wrote the code before the workflow was called: that is the mix route")
+        self.assertEqual(run.route_taken([{"tool": "Workflow", "label": "agentic-sdd-flow:architecture-design", "t": 3},
+                                          {"tool": "Workflow", "label": "agentic-sdd-flow:dotnet-sdd", "t": 9}]), "deep")
         self.assertEqual(run.workflow_args({"args": '{"mode": "light", "plan": "x"}'}), {"mode": "light"})
         self.assertEqual(run.workflow_args({"args": {"scope": "compact"}}), {"scope": "compact"})
         self.assertEqual(run.workflow_args({"args": "not json"}), {})

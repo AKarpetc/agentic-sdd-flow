@@ -45,6 +45,8 @@ def prepare_workspace(root, name, overlay=None):
     """A fresh copy of the fixture; a task overlay (tasks/<name>.overlay/) is copied on top of it, so a task
     can ship its own docs, CI file or a variant of a source file without touching the shared fixture."""
     workspace = os.path.join(root, name)
+    if os.path.exists(workspace):
+        shutil.rmtree(workspace)  # a re-run into the same --out starts clean; a half-finished workspace is not a baseline
     shutil.copytree(FIXTURE, workspace, ignore=shutil.ignore_patterns("bin", "obj"))
     if overlay:
         shutil.copytree(os.path.join(TASKS, overlay), workspace, dirs_exist_ok=True)
@@ -135,14 +137,25 @@ def conflict_signals(task, metrics):
 
 
 def route_taken(dispatches):
-    """The tier the plugin arm actually ran, read off its own dispatches — never off what the session claims."""
+    """The route the plugin arm actually ran, read off its own dispatches — never off what the session claims.
+
+    mix is the one that needs care: it looks like `standard` from the workflow alone, and is told apart by
+    `mode: review` (the workflow gates a branch somebody else wrote) or by the superpowers TDD skill having
+    written the code before the workflow was called at all."""
     workflows = [d for d in dispatches if d["tool"] == "Workflow"]
     if any("architecture-design" in d["label"] for d in workflows):
         return "deep"
     sdd = [d for d in workflows if "dotnet-sdd" in d["label"]]
     if not sdd:
         return "quick"
-    return "light" if any(d.get("mode") == "light" for d in sdd) else "standard"
+    if any(d.get("mode") == "review" for d in sdd):
+        return "mix"
+    if any(d.get("mode") == "light" for d in sdd):
+        return "light"
+    first_workflow = min(d["t"] for d in sdd)
+    if any(d["tool"] == "Skill" and "test-driven-development" in d["label"] and d["t"] < first_workflow for d in dispatches):
+        return "mix"
+    return "standard"
 
 
 def parse_stream(stream_path):
