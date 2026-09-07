@@ -117,6 +117,16 @@ def already_asked(session, topic):
     return seen
 
 
+def record(pack, topic, tool, outcome):
+    """One line per orientation attempt, next to the pack: the evidence for whether agents take context
+    from disk or rebuild it. Never fails the hook — a log that breaks a tool call is worse than no log."""
+    try:
+        with open(os.path.join(os.path.dirname(pack), "packgate.log"), "a", encoding="utf-8") as handle:
+            handle.write("%s\t%s\t%s\n" % (outcome, topic, tool))
+    except OSError:
+        pass
+
+
 def deny(reason):
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
@@ -141,9 +151,12 @@ def main():
         return 0
     answer = section(text, headings)
     if not answer or re.search(r"\bunknown\b", answer, re.IGNORECASE):
+        record(pack, topic, data.get("tool_name", "?"), "unanswered")
         return 0  # the pack does not answer this one: derive it, and say so in your report
     if already_asked(data.get("session_id"), topic):
+        record(pack, topic, data.get("tool_name", "?"), "second-ask-allowed")
         return 0  # asked twice: the pack may be wrong, let the agent check for itself
+    record(pack, topic, data.get("tool_name", "?"), "redirected")
     return deny(
         "This run already answered that. Do not re-derive the %s — it is in the context pack at %s, "
         "which is authoritative for this run:\n\n%s\n\nUse it and spend your tool calls on the code your task "

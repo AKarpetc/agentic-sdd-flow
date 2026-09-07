@@ -107,6 +107,13 @@ class ContextPackGate(unittest.TestCase):
     def test_no_pack_means_no_interference(self):
         self.assertIsNone(run("mcp__cwm-roslyn-navigator__get_project_graph", os.path.join(self.tmp.name, "..", "nowhere-at-all")))
 
+    def test_every_attempt_is_logged_next_to_the_pack(self):
+        pack = os.path.join(self.workspace, ".superpowers", "sdd", "context-pack.md")
+        self.module.record(pack, "graph", "mcp__cwm-roslyn-navigator__get_project_graph", "redirected")
+        log = open(os.path.join(os.path.dirname(pack), "packgate.log"), encoding="utf-8").read()
+        self.assertIn("redirected\tgraph", log, "adherence has to be measurable, not assumed")
+        self.module.record("/nowhere/at/all/pack.md", "graph", "x", "redirected")  # must not raise
+
     def test_the_gate_is_wired_as_its_own_pretooluse_group(self):
         hooks = json.load(open(os.path.join(_paths.PLUGIN_ROOT, "hooks", "hooks.json"), encoding="utf-8"))["hooks"]
         groups = [g for g in hooks["PreToolUse"] if any("context-pack.py" in h["command"] for h in g["hooks"])]
