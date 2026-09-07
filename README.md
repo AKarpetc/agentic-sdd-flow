@@ -117,7 +117,7 @@ announces it in one line, and escalates on evidence — one tier up, never two. 
 
 | Tier | When | What runs | Ballpark |
 |---|---|---|---|
-| `quick` | one or two files, nothing new on the surface | inline: implement → `tests-writer` → one scoped review | ≈ $3–6 |
+| `quick` | one or two files, nothing new on the surface | the superpowers flow itself (brainstorming → test-driven-development) in the session — **no plugin agent**; the rules still hold through the hooks | ≈ $2–4 |
 | `light` | one project, ≤ 5 files, one endpoint | short plan → `dotnet-sdd` `mode: 'light'`: implement + tests per task, **one** whole-branch review with one fix wave | ≈ $8–14 |
 | `standard` | a feature inside one service | brainstorm → plan → one plan review → `dotnet-sdd`: per-task review, verified findings, bounded fix loop, final review | ≈ $18–25 |
 | `deep` | two or more projects, a store or migration, an external contract, new infrastructure | `architecture-design` first (`scope: 'compact'` unless it really spans services), then `standard` | + $15–40 |

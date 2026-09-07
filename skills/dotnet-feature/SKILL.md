@@ -43,8 +43,9 @@ the brief names). Do not explore further to decide — the gate is meant to be c
 
 **One tier up, never two.** When two tiers fit, take the cheaper one and let the escalation rules move it up:
 
-- `quick` → `light` when the fix needs a second file you did not expect, or the change has no test that can
-  cover it without new plumbing.
+- `quick` → `light` when the fix needs a third production file you did not expect, or brainstorming
+  concludes the change is not bounded. An **empty or missing test project is not a reason**: `quick` writes
+  its own tests and a `*.Tests` project with the packages already referenced is not plumbing.
 - `light` → `standard` when the implementer reports `done_with_concerns` about scope, the Debug phase ran,
   or the final review returns a `critical` finding.
 - `standard` → `deep` **only with the user's word.** If a task turns out to change a contract or a store,
@@ -64,21 +65,24 @@ split: show the evidence table to the user and **stop until they rule** — neve
 assertion or a consumer contract to match a ticket. Inside `dotnet-sdd` this happens on its own
 (Reconcile phase; the workflow returns `status: 'contradiction'` for you to act on).
 
-## 3q. `quick` — inline
+## 3q. `quick` — the superpowers flow, no plugin agents
 
-No brainstorming, no plan, no workflow. In this session:
+A one- or two-file change does not need the plugin's machinery; it needs the plugin's *rules*, and those
+are already in force through the hooks (the injected contract, the write gate on `.cs`/`.csproj`). So:
 
-1. Read the code the brief names (Roslyn first).
-2. Make the change yourself, or dispatch `agentic-sdd-flow:dotnet-implementer` for one task when the change
-   spans more than one file.
-3. Dispatch `agentic-sdd-flow:tests-writer` for the behaviour you changed — this is not optional, it is
-   the one gate a `quick` run keeps.
-4. Review the diff yourself with the `dotnet-code-review` skill, scoped to the changed files. Fix what it
-   files as `critical` or `important`, and any `defect` of any severity.
-5. Commit as `<TASK-KEY>: <Description>` on the current branch, report the branch, and stop.
+1. Invoke `superpowers:brainstorming` and let it size the change itself; when it concludes spike or
+   bounded (it will, for a `quick` change), continue with `superpowers:test-driven-development` in this
+   session — red test, code, green, refactor — for every branch the brief names, including the entry point
+   (endpoint, handler) once.
+2. Dispatch **no** plugin agent: no implementer, no `tests-writer`, no reviewer, no workflow. The write gate
+   rejects a convention violation the moment it is written; the tests are yours to write, under the test
+   contract in your context.
+3. Commit as `<TASK-KEY>: <Description>` on the current branch, report the branch, and stop.
 
-Budget: one implementer-sized pass and one tests pass. If you find yourself opening a fifth file, escalate
-to `light` and say so.
+Measured on the benchmark's simple task (T5, Opus 5): this flow delivers 5/5 with an endpoint test in
+≈ 4 minutes for ≈ $2; the same change through `light` cost $7 and 16 minutes for the same tree. If a
+fourth production file opens, or brainstorming itself concludes the change is not bounded, escalate to
+`light` and say so.
 
 ## 3l. `light` — plan, then the light workflow
 

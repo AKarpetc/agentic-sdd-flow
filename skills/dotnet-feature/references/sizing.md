@@ -38,10 +38,13 @@ introduced in 0.2.8. Use it to sanity-check a routing decision, not as a promise
 
 | Tier | Agents dispatched | Typical wall | Typical cost |
 |---|---|---|---|
-| `quick` | 2–3 (implementer, tests-writer, one scoped review) | 5–10 min | ≈ $3–6 |
+| `quick` | **0** — the superpowers flow (brainstorming → test-driven-development) in the session, rules enforced by the hooks | 4–8 min | ≈ $2–4 (measured: $2.23, 3.8 min on T5) |
 | `light` | 2 per task + 1–2 whole-branch | 12–20 min | ≈ $8–14 |
 | `standard` | 5–7 per task + final | 30–45 min | ≈ $18–25 |
 | `deep` | + 9 (compact) or + 17 (full) before a line of code | + 20–60 min | + $15–40 |
 
 A `standard` run on a `quick`-sized change is the expensive mistake the gate exists to prevent: the
-0.2.7 measurement paid $31.95 and 34 minutes for a change the baseline delivered for $8.33 in 11.
+0.2.7 measurement paid $31.95 and 34 minutes for a change the baseline delivered for $8.33 in 11. The
+milder version of the same mistake is real too: on the 0.2.8 benchmark's simple task the gate chose
+`light` because the test project was empty, and paid $7.38 and 16 minutes for the tree the superpowers
+flow produced for $2.23 in 4 — same files, same tests, same endpoint test.
