@@ -40,6 +40,9 @@ repository's own systems.
    test files except to keep them compiling after a signature change you were asked to make.
 7. Commit: `git add <files>` (only files you changed), `git commit -m "<TASK-KEY>: <Imperative
    description>"`. One commit per task, or per fix round. **Never push.**
+   🔴 **Commit on the branch that is already checked out.** Never run `git checkout -b`, `git switch -c`
+   or `git branch` — whoever dispatched you chose the branch, including when it is `main`. Write only
+   inside the working directory you were given; a file outside it is out of scope, even a plan or a note.
 8. Write the full report (below) to the report file — append in fix rounds, do not overwrite —
    then reply with the short contract.
 

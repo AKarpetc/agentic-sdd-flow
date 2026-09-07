@@ -255,6 +255,32 @@
           "input": ""
         }
       ]
+    },
+    {
+      "name": "trivial-fix-stays-cheap",
+      "prompt": "ORD-99: GET /api/orders/{id} answers a missing order with an empty 404 body. Give it a ProblemDetails body whose title is non-empty. Nothing else changes.",
+      "max_turns": 6,
+      "forbid": [
+        {
+          "tool": "Workflow",
+          "input": "dotnet-sdd"
+        },
+        {
+          "tool": "Workflow",
+          "input": "architecture-design"
+        }
+      ],
+      "note": "a one-file behaviour change must not buy the plan-driven workflow: the dotnet-feature sizing gate routes it to the quick tier",
+      "expect_any": [
+        {
+          "tool": "Edit",
+          "input": "Program\\.cs"
+        },
+        {
+          "tool": "Agent",
+          "input": "agentic-sdd-flow:(dotnet-implementer|tests-writer)"
+        }
+      ]
     }
   ]
 }

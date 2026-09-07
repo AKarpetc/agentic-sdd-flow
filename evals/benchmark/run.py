@@ -22,7 +22,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FIXTURE = os.path.join(HERE, "fixture")
 TASKS = os.path.join(HERE, "tasks")
 ACCEPTANCE = os.path.join(HERE, "acceptance.py")
-KEYS = {"T1": "ORD-42", "T2": "ORD-43", "T3": "ORD-44", "T4": "ORD-45"}
+MANIFEST = json.load(open(os.path.join(TASKS, "tasks.json"), encoding="utf-8"))
+KEYS = {task: meta["key"] for task, meta in MANIFEST.items()}
 TOOLS = ["Bash", "Read", "Write", "Edit", "MultiEdit", "Glob", "Grep", "Agent", "Skill", "Workflow", "TodoWrite", "TaskOutput", "Monitor"]
 
 
@@ -100,6 +101,30 @@ def run_session(prompt, workspace, arm, stream_path, timeout, max_turns):
     return {"wallSeconds": round(time.time() - started, 1), "timedOut": timed_out, "exit": proc.returncode}
 
 
+def workflow_args(inp):
+    """`mode` / `scope` decide which route the plugin took; callers pass args as an object or as a JSON string."""
+    raw = inp.get("args")
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            raw = None
+    if not isinstance(raw, dict):
+        return {}
+    return {key: raw[key] for key in ("mode", "scope") if key in raw}
+
+
+def route_taken(dispatches):
+    """The tier the plugin arm actually ran, read off its own dispatches — never off what the session claims."""
+    workflows = [d for d in dispatches if d["tool"] == "Workflow"]
+    if any("architecture-design" in d["label"] for d in workflows):
+        return "deep"
+    sdd = [d for d in workflows if "dotnet-sdd" in d["label"]]
+    if not sdd:
+        return "quick"
+    return "light" if any(d.get("mode") == "light" for d in sdd) else "standard"
+
+
 def parse_stream(stream_path):
     events = []
     for line in open(stream_path, encoding="utf-8"):
@@ -126,7 +151,10 @@ def parse_stream(stream_path):
                     if not parent and name in ("Agent", "Skill", "Workflow"):
                         inp = block.get("input", {})
                         label = inp.get("subagent_type") or inp.get("skill") or inp.get("name") or inp.get("scriptPath") or "?"
-                        dispatches.append({"t": t, "tool": name, "label": label, "description": inp.get("description", "")[:80]})
+                        dispatch = {"t": t, "tool": name, "label": label, "description": inp.get("description", "")[:80]}
+                        if name == "Workflow":
+                            dispatch.update(workflow_args(inp))
+                        dispatches.append(dispatch)
                         if name == "Agent":
                             agents[block["id"]] = {"type": label, "description": inp.get("description", "")[:80], "start": t, "last": t, "tools": 0}
                 elif block.get("type") == "text" and not parent:
@@ -142,7 +170,7 @@ def parse_stream(stream_path):
         "tokens": {"input": usage.get("input_tokens"), "output": usage.get("output_tokens"),
                    "cacheRead": usage.get("cache_read_input_tokens"), "cacheCreation": usage.get("cache_creation_input_tokens")},
         "durationApiMs": result.get("duration_api_ms"), "modelUsage": result.get("modelUsage"),
-        "topLevelTools": top_calls, "nestedTools": nested_calls, "dispatches": dispatches,
+        "topLevelTools": top_calls, "nestedTools": nested_calls, "dispatches": dispatches, "route": route_taken(dispatches),
         "agents": [dict(v, seconds=round(v["last"] - v["start"], 1)) for v in agents.values()],
         "reportedStatus": status.group(1) if status else None, "finalText": final_text[-1500:],
     }
@@ -177,19 +205,23 @@ def run_pair(task, arm_name, arm, root, timeout, max_turns, port):
         checks = json.loads(acceptance.stdout)
     except ValueError:
         checks = {"error": acceptance.stdout[-800:] + acceptance.stderr[-800:]}
-    outcome = {"task": task, "arm": arm_name, "label": arm["label"], "session": session, "metrics": metrics, "pulse": pulse, "acceptance": checks, "workspace": workspace}
+    outcome = {"task": task, "arm": arm_name, "label": arm["label"], "taskMeta": MANIFEST.get(task, {}),
+               "session": session, "metrics": metrics, "pulse": pulse, "acceptance": checks, "workspace": workspace}
     with open(os.path.join(root, name + ".json"), "w", encoding="utf-8") as handle:
         json.dump(outcome, handle, indent=2, ensure_ascii=False)
     acc = checks.get("acceptance", {})
-    print("done  %-12s %-9s wall=%.0fs cost=$%.2f turns=%s acceptance=%s/%s build=%s tests=%s/%s" % (
+    print("done  %-12s %-9s wall=%.0fs cost=$%.2f turns=%s acceptance=%s/%s build=%s tests=%s/%s route=%s (expected %s)" % (
         task, arm_name, session["wallSeconds"], metrics["costUsd"] or 0, metrics["turns"], acc.get("passed"), acc.get("total"),
-        checks.get("build", {}).get("ok"), checks.get("tests", {}).get("passed"), checks.get("tests", {}).get("total")), flush=True)
+        checks.get("build", {}).get("ok"), checks.get("tests", {}).get("passed"), checks.get("tests", {}).get("total"),
+        metrics["route"] if arm_name == "plugin" else "-", MANIFEST.get(task, {}).get("expectedTier", "?")), flush=True)
     return outcome
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--task", action="append", required=True)
+    parser.add_argument("--task", action="append", help="task id from tasks/tasks.json; repeatable")
+    parser.add_argument("--class", dest="klass", action="append", choices=sorted({m["class"] for m in MANIFEST.values()}),
+                        help="run every task of this class (simple/medium/complex/vague); repeatable")
     parser.add_argument("--arm", action="append")
     parser.add_argument("--out", required=True)
     parser.add_argument("--timeout", type=int, default=5400)
@@ -198,7 +230,12 @@ def main():
     parser.add_argument("--port-base", type=int, default=5200, help="first acceptance port; give each concurrent runner its own range")
     args = parser.parse_args()
     arms = json.load(open(os.path.join(TASKS, "arms.json")))
-    selected = [(t, a) for t in args.task for a in (args.arm or list(arms))]
+    tasks = list(args.task or [])
+    for klass in args.klass or []:
+        tasks += [task for task, meta in MANIFEST.items() if meta["class"] == klass and task not in tasks]
+    if not tasks:
+        parser.error("give at least one --task or --class")
+    selected = [(t, a) for t in sorted(set(tasks), key=lambda t: list(MANIFEST).index(t) if t in MANIFEST else 99) for a in (args.arm or list(arms))]
     os.makedirs(args.out, exist_ok=True)
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = [pool.submit(run_pair, t, a, arms[a], args.out, args.timeout, args.max_turns, args.port_base + i) for i, (t, a) in enumerate(selected)]

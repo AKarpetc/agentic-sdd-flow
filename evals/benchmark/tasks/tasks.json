@@ -1,0 +1,44 @@
+{
+  "T1": {
+    "key": "ORD-42",
+    "class": "medium",
+    "expectedTier": "light",
+    "summary": "one read endpoint through the service layer"
+  },
+  "T2": {
+    "key": "ORD-43",
+    "class": "medium",
+    "expectedTier": "standard",
+    "summary": "state change, ProblemDetails, an outbox others read"
+  },
+  "T3": {
+    "key": "ORD-44",
+    "class": "medium",
+    "expectedTier": "light",
+    "summary": "paging with validation through existing arithmetic"
+  },
+  "T4": {
+    "key": "ORD-45",
+    "class": "vague",
+    "expectedTier": "standard",
+    "summary": "promotions: loose on structure, exact on outcomes"
+  },
+  "T5": {
+    "key": "ORD-46",
+    "class": "simple",
+    "expectedTier": "quick",
+    "summary": "error bodies on one existing endpoint, one file"
+  },
+  "T6": {
+    "key": "ORD-47",
+    "class": "complex",
+    "expectedTier": "standard",
+    "summary": "transition state machine, idempotency, audit history, one rule source"
+  },
+  "T7": {
+    "key": "ORD-48",
+    "class": "vague",
+    "expectedTier": "standard",
+    "summary": "attention list: the rule is described as intent, not as code"
+  }
+}

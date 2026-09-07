@@ -284,7 +284,7 @@ Within each section, order findings most-severe first. Reference locations as `F
 
 ## Structured verdicts (workflow callers)
 
-When a caller asks for findings with a `severity` field (the `dotnet-sdd` and `architecture-design` workflows do), map the sections above to exactly three levels and give every finding a stable id:
+When a caller asks for findings with a `severity` field (the `dotnet-sdd` and `architecture-design` workflows do), map the sections above to exactly three levels, give every finding a stable id, **and give every finding a `kind`**:
 
 | Section | `severity` |
 |---|---|
@@ -293,6 +293,19 @@ When a caller asks for findings with a `severity` field (the `dotnet-sdd` and `a
 | 🧪 Tests & Docs Feedback | `important` when a required test or contract doc is missing; otherwise `minor` |
 | ⚠️ Refactoring Suggestions | `minor` (promote to `important` only when the pattern violation will break under a stated requirement) |
 | 💡 Minor Tweaks / Nitpicks | `minor` |
+
+| `kind` | What it is |
+|---|---|
+| `defect` | the code, as written, produces a wrong or unsafe result — a race or check-then-act, a lost update, an overflow or off-by-one, wrong money rounding, a swallowed exception, a resource leak, a null dereference, a wrong branch or comparison, a cancellation token dropped on a cancellable path |
+| `convention` | a breach of the rules contract or the checklist |
+| `style` | naming, idiom, taste — nothing behaves differently |
+
+🔴 **Severity floor for defects.** A finding whose `kind` is `defect` is **never below `important`**,
+whatever section it appears in. A check-then-act race written up under *Refactoring Suggestions* is an
+`important` `defect`, not a `minor` suggestion. The only defect that stays `minor` is one whose failing
+path cannot be reached in the code as it now stands — say why in the issue text. This floor exists because
+the 0.2.7 measurement found both real bugs of the run, filed them as `minor`, and the workflow deferred
+them for ever: the review must be able to reach the code.
 
 Ids are `F1`, `F2`, … in the order the findings appear. On a re-review, reuse the ids you were given and report each as `addressed: true|false` before adding new ones. Findings against plan or brief files (not code) are reported as `minor` with the note `plan-text`, never as blocking.
 

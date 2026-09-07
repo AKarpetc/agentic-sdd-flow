@@ -174,9 +174,116 @@ def acceptance_t4(base):
     return checks
 
 
-ACCEPTANCE = {"T1": acceptance_t1, "T2": acceptance_t2, "T3": acceptance_t3, "T4": acceptance_t4}
+def acceptance_t5(base):
+    checks = []
+    for oid, status_name in ((101, "Placed"), (201, "Placed")):
+        status, body = http("GET", f"{base}/api/orders/{oid}")
+        ok = status == 200 and isinstance(body, dict) and str(body.get("id")) == str(oid) \
+            and str(body.get("status")) == status_name
+        if oid == 101:
+            ok = ok and str(body.get("customerId")) == "1" and near(body.get("total"), 10.0)
+        checks.append({"name": f"order {oid} still 200 with its shape", "ok": ok, "detail": f"{status} {str(body)[:120]}"})
+    status, body = http("GET", f"{base}/api/orders/999")
+    ok = status == 404 and isinstance(body, dict) and bool(body.get("title")) and "999" in str(body.get("detail", ""))
+    checks.append({"name": "unknown 999 -> 404 ProblemDetails naming the id", "ok": ok, "detail": f"{status} {str(body)[:160]}"})
+    for oid in (0, -5):
+        status, body = http("GET", f"{base}/api/orders/{oid}")
+        ok = status == 400 and isinstance(body, dict) and "id" in str(body.get("detail", "")).lower()
+        checks.append({"name": f"id {oid} -> 400 naming id", "ok": ok, "detail": f"{status} {str(body)[:160]}"})
+    return checks
+
+
+def acceptance_t6(base):
+    """Sequential by design: the state machine is exercised in order against one fresh process."""
+    checks = []
+
+    def transition(oid, to, request_id):
+        return http("POST", f"{base}/api/orders/{oid}/transitions", {"to": to, "requestId": request_id})
+
+    status, first = transition(101, "Paid", "r1")
+    ok = status == 200 and isinstance(first, dict) and str(first.get("orderId")) == "101" \
+        and str(first.get("status")).lower() == "paid"
+    checks.append({"name": "101 Placed -> Paid = 200", "ok": ok, "detail": f"{status} {str(first)[:120]}"})
+    status, repeat = transition(101, "Paid", "r1")
+    checks.append({"name": "same requestId repeats -> 200 with the same body", "ok": status == 200 and repeat == first,
+                   "detail": f"{status} {str(repeat)[:120]}"})
+    status, body = http("GET", f"{base}/api/orders/101/history")
+    entry = body[0] if isinstance(body, list) and len(body) == 1 and isinstance(body[0], dict) else None
+    ok = status == 200 and entry is not None and str(entry.get("from")).lower() == "placed" \
+        and str(entry.get("to")).lower() == "paid" and str(entry.get("requestId")) == "r1"
+    checks.append({"name": "101 history has exactly one entry after the idempotent repeat", "ok": ok, "detail": f"{status} {str(body)[:160]}"})
+    status, body = transition(101, "Shipped", "r2")
+    checks.append({"name": "101 Paid -> Shipped = 200", "ok": status == 200 and isinstance(body, dict) and str(body.get("status")).lower() == "shipped",
+                   "detail": f"{status} {str(body)[:120]}"})
+    status, body = transition(104, "Cancelled", "r3")
+    checks.append({"name": "104 Shipped -> Cancelled = 409", "ok": status == 409 and isinstance(body, dict) and bool(body.get("title")),
+                   "detail": f"{status} {str(body)[:160]}"})
+    status, body = transition(103, "Paid", "r4")
+    checks.append({"name": "103 Cancelled -> Paid = 409", "ok": status == 409, "detail": f"{status} {str(body)[:120]}"})
+    status, body = transition(999, "Paid", "r5")
+    checks.append({"name": "unknown 999 -> 404", "ok": status == 404 and checks[0]["ok"], "detail": f"{status} {str(body)[:120]}"})
+    status, body = transition(201, "Frozen", "r6")
+    checks.append({"name": "unknown target status -> 400", "ok": status == 400, "detail": f"{status} {str(body)[:120]}"})
+    status, body = http("GET", f"{base}/api/orders/101")
+    checks.append({"name": "101 persisted as Shipped", "ok": status == 200 and isinstance(body, dict) and str(body.get("status")).lower() == "shipped",
+                   "detail": f"{status} {str(body)[:120]}"})
+    status, body = http("GET", f"{base}/api/orders/201/history")
+    checks.append({"name": "201 never moved -> empty history", "ok": status == 200 and body == [], "detail": f"{status} {str(body)[:120]}"})
+    return checks
+
+
+def acceptance_t7(base):
+    checks = []
+
+    def attention(cid):
+        status, body = http("GET", f"{base}/api/customers/{cid}/attention")
+        items = body.get("items") if isinstance(body, dict) else None
+        ids = [i.get("orderId") for i in items] if isinstance(items, list) and all(isinstance(i, dict) for i in items) else None
+        return status, body, items, ids
+
+    status, body, items, ids = attention(1)
+    ok = status == 200 and isinstance(body, dict) and str(body.get("customerId")) == "1" and ids is not None \
+        and any(str(i) == "102" for i in ids) and not any(str(i) == "103" for i in ids)
+    checks.append({"name": "customer 1 attention has 102, not 103", "ok": ok, "detail": f"{status} {str(body)[:160]}"})
+    reasons_ok = items is not None and bool(items) and all(isinstance(i.get("reason"), str) and i["reason"].strip() for i in items)
+    checks.append({"name": "every item carries a non-empty reason", "ok": bool(reasons_ok), "detail": f"{status} {str(items)[:160]}"})
+    unique_ok = ids is not None and len(ids) == len({str(i) for i in ids})
+    checks.append({"name": "no order appears twice", "ok": bool(unique_ok), "detail": str(ids)[:160]})
+    status, body, items, ids = attention(2)
+    checks.append({"name": "customer 2 attention excludes the cancelled 202", "ok": status == 200 and ids is not None and not any(str(i) == "202" for i in ids),
+                   "detail": f"{status} {str(body)[:160]}"})
+    for cid in (3, 99):
+        status, body, items, ids = attention(cid)
+        checks.append({"name": f"customer {cid} -> 200 with an empty items array", "ok": status == 200 and items == [],
+                       "detail": f"{status} {str(body)[:160]}"})
+    return checks
+
+
+
+ACCEPTANCE = {"T1": acceptance_t1, "T2": acceptance_t2, "T3": acceptance_t3, "T4": acceptance_t4,
+              "T5": acceptance_t5, "T6": acceptance_t6, "T7": acceptance_t7}
+# The one check per task that cannot pass unless the pre-existing defect is fixed at its root.
 PLANTED = {"T1": "total customer 1 = 37.75", "T2": "cancel 102 -> 204", "T3": "customer 1 page 1 size 2 -> [101, 102] of 4",
-           "T4": "report customer 2 contains 15.00"}
+           "T4": "report customer 2 contains 15.00", "T5": "unknown 999 -> 404 ProblemDetails naming the id",
+           "T6": "104 Shipped -> Cancelled = 409", "T7": "customer 1 attention has 102, not 103"}
+
+
+def quality_common(workspace):
+    """Signals that separate the arms on every task, not only on T4: does the suite reach the endpoint at all,
+    and how much of it is there. The 0.2.7 measurement found 0 % endpoint coverage in the baseline's trees."""
+    tests = {}
+    for path in glob.glob(os.path.join(workspace, "tests", "**", "*.cs"), recursive=True):
+        if not re.search(r"[/\\](obj|bin)[/\\]", path):
+            tests[os.path.relpath(path, workspace)] = open(path, encoding="utf-8-sig").read()
+    text = "\n".join(tests.values())
+    http_files = [p for p, t in tests.items() if re.search(r"WebApplicationFactory|CreateClient\(", t)]
+    return {
+        "testFiles": len(tests),
+        "testCases": len(re.findall(r"\[\s*(?:Fact|Theory)\b", text)),
+        "httpLevelTestFiles": http_files,
+        "reachesTheEndpoint": bool(http_files),
+        "theoryCases": len(re.findall(r"\[\s*InlineData\b", text)) + len(re.findall(r"TheoryData<", text)),
+    }
 
 
 def quality_t4(workspace):
@@ -244,7 +351,7 @@ def main():
     parser.add_argument("workspace")
     parser.add_argument("--port", type=int, default=5177)
     args = parser.parse_args()
-    key = {"T1": "ORD-42", "T2": "ORD-43", "T3": "ORD-44", "T4": "ORD-45"}[args.task]
+    key = json.load(open(os.path.join(HERE, "tasks", "tasks.json")))[args.task]["key"]
     result = {"task": args.task, "build": build(args.workspace)}
     result["tests"] = tests(args.workspace) if result["build"]["ok"] else {"ok": False, "passed": 0, "failed": 0, "total": 0, "tail": "no build"}
     checks = []
@@ -260,8 +367,9 @@ def main():
     result["acceptance"] = {"passed": sum(c["ok"] for c in checks), "total": len(checks) or len(ACCEPTANCE[args.task]("http://127.0.0.1:1")), "checks": checks}
     result["plantedBugFixed"] = any(c["ok"] and c["name"] == PLANTED[args.task] for c in checks)
     result["conventions"] = conventions(args.workspace)
+    result["quality"] = quality_common(args.workspace)
     if args.task == "T4":
-        result["quality"] = quality_t4(args.workspace)
+        result["quality"].update(quality_t4(args.workspace))
     result["git"] = git_hygiene(args.workspace, key)
     print(json.dumps(result, indent=2))
 

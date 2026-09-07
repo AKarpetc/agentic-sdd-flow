@@ -1,15 +1,21 @@
 ---
 name: dotnet-feature
 description: >
-  Single entry point for plan-driven .NET feature work: brainstorm the design (approval gate),
-  write the plan, then execute it with the dotnet-sdd workflow (implement → tests → review →
-  verified fix loop → final review) and hand back a branch. Use for "implement feature
-  PROJ-123 …", "do task PROJ-123", "/dotnet-feature PROJ-123 <description>".
+  Single entry point for plan-driven .NET feature work: size the change, then run the route it
+  deserves — inline for a one-file fix, a light workflow for a small change, the full
+  implement → tests → review → verified fix loop for a feature, the design pipeline for a change
+  that crosses services. Use for "implement feature PROJ-123 …", "do task PROJ-123",
+  "/dotnet-feature PROJ-123 <description>".
 ---
 
 # dotnet-feature
 
 Runs one ticket end-to-end. It never pushes, never merges and never opens a PR.
+
+🔴 **Every run starts with the sizing gate in step 2.** Running the full route on a one-file change costs
+five to ten times what the change is worth; running the inline route on a cross-service change ships an
+unreviewed design. The gate is what makes the flow affordable — do not skip it, and state the tier you
+picked in one line before you start work.
 
 ## 1. Resolve the inputs
 
@@ -19,69 +25,116 @@ Runs one ticket end-to-end. It never pushes, never merges and never opens a PR.
   directory under the repository root; `projectDir` is its absolute path (the directory holding
   the `.sln`/`.slnx`). Ask if ambiguous.
 - **Description**: the rest of the arguments.
+- **Forced tier** (optional): `--tier quick|light|standard|deep` anywhere in the arguments, or the user
+  saying "just do it" / "full review please". An explicit tier always wins over the gate.
 
-## 2. Design — `superpowers:brainstorming`
+## 2. Size the change — the tier gate
 
-Invoke `superpowers:brainstorming` with the description. Keep its approval gate. Then:
+Answer the five questions in [references/sizing.md](references/sizing.md) from the brief plus a **budgeted**
+look at the repository (at most: one `roslyn-query.py <project> get_endpoint_map` or one Grep for the symbol
+the brief names). Do not explore further to decide — the gate is meant to be cheaper than the work.
 
-- **spike** or **bounded** → no workflow. Finish the work in this session using
-  `tests-writer` for tests and the `dotnet-code-review` skill for review. Stop here.
-- **architectural** → after brainstorming's clarifying questions (its step 3) decide whether the
-  design pipeline is proportionate:
+| Tier | The change looks like | Route |
+|---|---|---|
+| `quick` | one or two files, no new endpoint / contract / migration / package, behaviour already specified (a bug fix, a rename, a guard, a threshold) | **step 3q** — inline, no plan, no workflow |
+| `light` | one project, roughly ≤ 5 files, one endpoint or one service behaviour, no data store, no external contract | **step 3l** — plan + `dotnet-sdd` in `mode: 'light'` |
+| `standard` | a feature inside one service: several tasks, new types, tests across layers | **step 3s** — brainstorm + plan + plan review + `dotnet-sdd` |
+| `deep` | two or more projects, a data store / migration on existing rows, an external contract (gRPC, public endpoint, published event), new infrastructure, or the user asks for a design | **step 3d** — `architecture-design`, then `standard` |
 
-  Run `architecture-design` when **any** of: the change spans two or more projects; it adds or
-  changes a data store, a table on a hot path, or a migration touching existing rows; it adds or
-  changes an external contract (gRPC service, public endpoint, published event); it introduces new
-  infrastructure (queue, cache, service); or the user asks for it. Otherwise let brainstorming's own
-  steps 4–5 (propose 2–3 approaches, present the design) carry the design and continue to step 3.
+**One tier up, never two.** When two tiers fit, take the cheaper one and let the escalation rules move it up:
 
-### 2a. `architecture-design` (when proportionate)
+- `quick` → `light` when the fix needs a second file you did not expect, or the change has no test that can
+  cover it without new plumbing.
+- `light` → `standard` when the implementer reports `done_with_concerns` about scope, the Debug phase ran,
+  or the final review returns a `critical` finding.
+- `standard` → `deep` **only with the user's word.** If a task turns out to change a contract or a store,
+  stop, say so, and ask.
 
-1. Resolve `plansDir`, `adrDir` from `.claude/agentic-sdd-flow.json` (defaults `temp/plans`,
+Announce the outcome in one line: `Tier: light — one endpoint in shop-api, no store or contract change.`
+De-escalation mid-run is not allowed: once the design pipeline has run, its spec is executed.
+
+## 3q. `quick` — inline
+
+No brainstorming, no plan, no workflow. In this session:
+
+1. Read the code the brief names (Roslyn first).
+2. Make the change yourself, or dispatch `agentic-sdd-flow:dotnet-implementer` for one task when the change
+   spans more than one file.
+3. Dispatch `agentic-sdd-flow:tests-writer` for the behaviour you changed — this is not optional, it is
+   the one gate a `quick` run keeps.
+4. Review the diff yourself with the `dotnet-code-review` skill, scoped to the changed files. Fix what it
+   files as `critical` or `important`, and any `defect` of any severity.
+5. Commit as `<TASK-KEY>: <Description>` on the current branch, report the branch, and stop.
+
+Budget: one implementer-sized pass and one tests pass. If you find yourself opening a fifth file, escalate
+to `light` and say so.
+
+## 3l. `light` — plan, then the light workflow
+
+1. Skip `superpowers:brainstorming`. Write the plan yourself as `<plansDir>/<YYYY-MM-DD>-<TASK-KEY>.md`
+   with `### Task N` headings, a Files block and a test line per task — the same shape `writing-plans`
+   produces, only shorter (usually two or three tasks). Do **not** dispatch `plan-reviewer`.
+2. `Workflow({ name: 'agentic-sdd-flow:dotnet-sdd', args: { project, projectDir, plan, taskKey, mode: 'light' } })`.
+   Light mode implements and tests each task, then reviews the **whole branch once** at the end with one
+   fix wave — there is no per-task review loop and no plan review.
+3. Continue at step 5.
+
+## 3s. `standard` — brainstorm, plan, full workflow
+
+1. **Design** — invoke `superpowers:brainstorming` with the description and keep its approval gate. Its own
+   steps 4–5 (propose 2–3 approaches, present the design) carry the design; the design pipeline is for `deep`.
+   If brainstorming itself concludes **spike** or **bounded**, drop to `quick` and finish in this session.
+2. **Plan** — invoke `superpowers:writing-plans`. Save the plan as `<plansDir>/<YYYY-MM-DD>-<TASK-KEY>.md`
+   (`plansDir` from config, default `temp/plans/`, resolved from the repository root — never inside the
+   target project's tracked tree). When the skill offers its **Execution Handoff** menu, do not show it.
+3. **Plan review — once, not twice.** Dispatch `agentic-sdd-flow:plan-reviewer` with the plan path and the
+   spec path; apply every critical and important finding to the plan yourself and dispatch the reviewer once
+   more (it verdicts the prior ids first). When it approves, pass `skipPlanReview: true` to the workflow —
+   the workflow's own Plan review phase would otherwise review the same plan a second time.
+4. `Workflow({ name: 'agentic-sdd-flow:dotnet-sdd', args: { project, projectDir, plan, taskKey, spec, skipPlanReview: true } })`.
+   (This skill's instructions are the user's opt-in for the Workflow tool.) If the runtime reports the name
+   as unknown, the plugin was installed during this session — ask the user to restart Claude Code, then retry.
+   If it returns `status: plan_rejected`, its `openQuestions` are the findings — fix the plan and rerun.
+
+## 3d. `deep` — the design pipeline first
+
+1. Run `superpowers:brainstorming` through its clarifying questions (its step 3), then:
+2. Resolve `plansDir`, `adrDir` from `.claude/agentic-sdd-flow.json` (defaults `temp/plans`,
    `docs/architecture/decisions`), `specsDir = docs/superpowers/specs` under the repository root,
    `slug = <TASK-KEY>-<kebab topic>`, `workDir = <plansDir>/architecture/<slug>`, and the projects
    list `[{ name, dir, solution }]` (from `projects` in the config or the resolved project directories).
-2. First run (read-only):
-   `Workflow({ name: 'agentic-sdd-flow:architecture-design', args: { brief, projects, nfrs, workDir, adrDir, specsDir, slug } })`.
+3. **Size the pipeline too.** Pass `scope: 'compact'` unless the change spans two or more services *and*
+   either crosses a trust boundary or touches a store; with `compact`, also pass
+   `trustBoundaryChange: true|false` and `dataChange: true|false` honestly — they gate the threat model and
+   the data review. `compact` runs one judge focus instead of five and keeps the three lenses.
+4. First run (read-only):
+   `Workflow({ name: 'agentic-sdd-flow:architecture-design', args: { brief, projects, nfrs, workDir, adrDir, specsDir, slug, scope, trustBoundaryChange, dataChange } })`.
    If the name is unknown, run it via `scriptPath: '<plugin root>/workflows/architecture-design.js'`.
-3. Present to the user, verbatim from the result: the winner and runner-up (`decision.winnerId`,
+5. Present to the user, verbatim from the result: the winner and runner-up (`decision.winnerId`,
    `decision.runnerUpId`, their summaries and estimates), the decision table, `decision.openDecisions`,
    `threats` with `critical`/`important` severity, `data.findings`, and `unanswered` drivers, and the
    paths of the proposal files whose mermaid sketches show each design. Ask
    which proposal to approve (or what to change). **Stop until the user answers.**
-4. Second run: the same call plus `approvedProposalId` and `resumeFromRunId` from the first run.
+6. Second run: the same call plus `approvedProposalId` and `resumeFromRunId` from the first run.
    It writes the ADRs and the spec; then continue with brainstorming's steps 7–8 (spec self-review,
-   user reviews the spec) on `specPath`, and go to step 3 with that spec. Always pass
-   `resumeFromRunId`; if the second run's `decision.winnerId` differs from the id you approved,
-   stop and show both — do not write ADRs from a different decision table.
+   user reviews the spec) on `specPath`. Always pass `resumeFromRunId`; if the second run's
+   `decision.winnerId` differs from the id you approved, stop and show both — do not write ADRs from a
+   different decision table.
+7. Continue at step 3s with that spec (plan → one plan review → the workflow).
 
-## 3. Plan — `superpowers:writing-plans`
+## 4. Resuming a workflow
 
-Invoke `superpowers:writing-plans`. Save the plan as `<plansDir>/<YYYY-MM-DD>-<TASK-KEY>.md`
-(`plansDir` from config, default `temp/plans/`, resolved from the repository root — never inside
-the target project's tracked tree). When the skill offers its **Execution Handoff** menu, do not
-show it. Before step 4 the plan is reviewed by its own reviewer: dispatch `agentic-sdd-flow:plan-reviewer`
-with the plan path and the spec path; apply every critical and important finding to the plan yourself
-and dispatch the reviewer once more (it verdicts the prior ids first). Only an approved verdict goes
-to step 4. The `dotnet-sdd` workflow runs the same review again as its Plan review phase; if it
-returns `status: plan_rejected`, its `openQuestions` are the findings — fix the plan and rerun the
-workflow with `resumeFromRunId`.
-
-## 4. Execute — the `dotnet-sdd` workflow
-
-Call `Workflow({ name: 'agentic-sdd-flow:dotnet-sdd', args: { project, projectDir, plan, taskKey } })`.
-(This skill's instructions are the user's opt-in for the Workflow tool.) If the runtime reports
-the name as unknown, the plugin was installed during this session — ask the user to restart
-Claude Code, then retry.
+`resumeFromRunId` replays cached agent results for unchanged prompts. After **editing the plan**, do not
+resume: the cached rejection would be replayed. Start a fresh run instead.
 
 ## 5. Act on the result
 
 - `status: 'done'` → invoke `superpowers:finishing-a-development-branch`; decline merge, push
   and PR; report the branch name, the commit range and `deferred` minors.
-- `status: 'blocked'` → show `openQuestions` and `rulings` verbatim; wait for answers; rerun step
-  4 with `args.answers = { "<taskId>": { "<question>": "<answer>" } }` and the same `resumeFromRunId` if the
-  runtime offers one.
+- `status: 'blocked'` → show `openQuestions` and `rulings` verbatim; wait for answers; rerun the
+  workflow with `args.answers = { "<taskId>": { "<question>": "<answer>" } }`.
 - `status: 'unstable'` → show `rulings` (parked/stalled findings) and `deferred`; ask whether to
-  run another fix wave, park them, or stop.
+  run another fix wave, park them, or stop. If the run was `light` and something serious is parked,
+  offer the `standard` rerun rather than another light wave.
 
-Always finish with the branch name and "not pushed".
+Always finish with the tier you ran, the branch name and "not pushed".

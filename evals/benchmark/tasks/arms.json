@@ -2,11 +2,11 @@
   "baseline": {
     "label": "superpowers only",
     "settings": {"enabledPlugins": {"agentic-sdd-flow@agentic-sdd-flow": false}},
-    "instruction": "Use the superpowers workflow end to end: `superpowers:brainstorming` (design), `superpowers:writing-plans` (plan under temp/plans/), `superpowers:subagent-driven-development` (implement, test and review each task with subagents), then `superpowers:finishing-a-development-branch` choosing to keep the branch as it is."
+    "instruction": "Use the superpowers skills as they direct themselves: `superpowers:brainstorming` first and respect its own sizing — when it concludes the change is a spike or bounded, implement it directly with `superpowers:test-driven-development` instead of writing a plan; otherwise `superpowers:writing-plans` (plan under temp/plans/) and `superpowers:subagent-driven-development` (implement, test and review each task with subagents). Finish with `superpowers:finishing-a-development-branch`, choosing to keep the branch as it is."
   },
   "plugin": {
     "label": "agentic-sdd-flow",
     "settings": null,
-    "instruction": "Use the plugin entry point `/agentic-sdd-flow:dotnet-feature <TASK-KEY> <title>` end to end (design → plan → dotnet-sdd workflow → branch). When a proposal or a spec is presented for approval, approve the recommended one and continue; when the workflow returns `plan_rejected`, fix the plan from its findings and rerun it with `resumeFromRunId`; when it returns open questions, answer them with the most conservative reading of the criteria and rerun."
+    "instruction": "Use the plugin entry point `/agentic-sdd-flow:dotnet-feature <TASK-KEY> <title>` end to end. Let the skill's own sizing gate choose the tier — never pass --tier and never overrule it. When a proposal or a spec is presented for approval, approve the recommended one and continue; when the workflow returns `plan_rejected`, fix the plan from its findings and rerun it; when it returns open questions, answer them with the most conservative reading of the criteria and rerun."
   }
 }

@@ -108,8 +108,26 @@ and restart. `claude plugin uninstall` + `install` is the fallback when the cach
 ```
 Design (approval gate) → plan → `dotnet-sdd` workflow → branch, never pushed.
 
+### The change is sized before it runs
+
+The entry skill picks one of four routes from the brief (blast radius, surface, data, reach,
+how much of the *what* is already decided — [the rubric](skills/dotnet-feature/references/sizing.md)),
+announces it in one line, and escalates on evidence — one tier up, never two. Force one with
+`--tier quick|light|standard|deep`.
+
+| Tier | When | What runs | Ballpark |
+|---|---|---|---|
+| `quick` | one or two files, nothing new on the surface | inline: implement → `tests-writer` → one scoped review | ≈ $3–6 |
+| `light` | one project, ≤ 5 files, one endpoint | short plan → `dotnet-sdd` `mode: 'light'`: implement + tests per task, **one** whole-branch review with one fix wave | ≈ $8–14 |
+| `standard` | a feature inside one service | brainstorm → plan → one plan review → `dotnet-sdd`: per-task review, verified findings, bounded fix loop, final review | ≈ $18–25 |
+| `deep` | two or more projects, a store or migration, an external contract, new infrastructure | `architecture-design` first (`scope: 'compact'` unless it really spans services), then `standard` | + $15–40 |
+
+A review finding that describes a reproducible failure is a `defect`, and a `defect` is never below
+`important` however soft the section it was written in; the verifier may raise a severity it can
+reproduce, and a minor defect rides along with the next fix round instead of being deferred for ever.
+
 Direct pieces: `/agentic-sdd-flow:dotnet-code-review`, the `tests-writer` agent,
-`Workflow({ name: 'agentic-sdd-flow:dotnet-sdd', args: { project, projectDir, plan, taskKey } })`.
+`Workflow({ name: 'agentic-sdd-flow:dotnet-sdd', args: { project, projectDir, plan, taskKey, mode } })`.
 On the architectural path the entry point can run `architecture-design` first (drivers → current C4 → three lens proposals → judge panel → threat model → data review; ADRs + spec after you approve). Every design artifact carries its diagrams as Mermaid fences (`skills/architecture-design/references/sketch-conventions.md`), so a sketch is reviewable text in the merge request and importable into FigJam later. Direct call: `Workflow({ name: 'agentic-sdd-flow:architecture-design', args: { brief, projects, workDir, adrDir, specsDir, slug } })`.
 
 Every stage has its own reviewer, and the author never reviews its own work: `design-reviewer`
@@ -254,7 +272,7 @@ and the fixture never needs the .NET SDK.
 python3 evals/routing/run.py [--case NAME] [--workers 3] [--out DIR]
 ```
 
-The end-to-end benchmark against bare superpowers lives in `evals/benchmark/`; the 0.2.7 measurement, the quality analysis and the proposal for 0.2.8 are summarised in [docs/benchmark-2026-09-findings.md](docs/benchmark-2026-09-findings.md).
+The end-to-end benchmark against bare superpowers lives in `evals/benchmark/`; the 0.2.7 measurement, the quality analysis and the proposal for 0.2.8 are summarised in [docs/benchmark-2026-09-findings.md](docs/benchmark-2026-09-findings.md), and what 0.2.8 changed in response — the tier gate, the defect floor, the overhead cuts — in [docs/0.2.8-tiered-flow.md](docs/0.2.8-tiered-flow.md).
 
 `claude plugin eval` is the intended home for these cases once it is enabled for the account; the
 runner is a stand-in with the same shape (prompt, expected dispatch, forbidden dispatch).

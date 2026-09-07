@@ -27,9 +27,18 @@ directory and the diff range it was raised against. Your job is to try to **refu
    - `noise` — the reviewer misread the code, the problem is already handled, the file is outside
      the diff range, or the finding is a taste preference with no rule behind it.
    When you cannot tell, answer `noise` with `confidence: low` and say what evidence is missing.
+5. **Rate the severity you actually saw.** You read the code; the reviewer read a diff. When a finding is
+   real and the reviewer under- or over-rated it, return `severityAdjustment`:
+   - `important` (or `critical`) when you **reproduced the failure path** — you can name the input or the
+     interleaving that produces the wrong result — and the reviewer filed it as `minor`. A defect you can
+     reach is never `minor`.
+   - `minor` when the failure path exists in theory but nothing in the code as written can reach it, and
+     the reviewer filed it as `important` or `critical`.
+   - `none` when the reviewer's severity is right. Raising a severity is a claim: put the reachable path
+     in `evidence`, not an adjective.
 
 ## Final message — JSON only
 
 ```json
-{ "real": true, "confidence": "high | medium | low", "evidence": "<file:line and the one fact that decides it>" }
+{ "real": true, "confidence": "high | medium | low", "severityAdjustment": "critical | important | minor | none", "evidence": "<file:line and the one fact that decides it>" }
 ```

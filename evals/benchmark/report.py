@@ -11,6 +11,7 @@ import sys
 from collections import defaultdict
 
 FIXTURE_BLOCKING = 4  # convention violations already present in the untouched fixture (ReportService)
+MANIFEST = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "tasks", "tasks.json"), encoding="utf-8"))
 
 
 def load(dirs):
@@ -54,6 +55,17 @@ def model_cost(m):
     return sum(costs) if costs else None
 
 
+def route_cell(r):
+    """What the run actually did (plugin arm only) against what the task should have cost."""
+    if r["arm"] != "plugin":
+        return "–"
+    expected = (r.get("taskMeta") or MANIFEST.get(r["task"], {})).get("expectedTier")
+    route = r["metrics"].get("route")
+    if not route:
+        return "–"
+    return route if route == expected or not expected else "%s (expected %s)" % (route, expected)
+
+
 def outcome_row(r):
     m, a = r["metrics"], r.get("acceptance", {})
     acc = a.get("acceptance", {})
@@ -61,8 +73,10 @@ def outcome_row(r):
     git = a.get("git", {})
     tests = a.get("tests", {})
     agents = m.get("pulse") or m.get("agents") or []
+    quality = a.get("quality") or {}
     return [
         r["label"],
+        route_cell(r),
         (m.get("reportedStatus") or m.get("subtype") or "–") + (" ⏱timeout" if r["session"].get("timedOut") else "")
         + (" ☠SIGTERM" if r["session"].get("exit") == 143 else ""),
         minutes(r["session"].get("wallSeconds")), money(m.get("costUsd")), money(model_cost(m)), tokens(m), m.get("turns") or "–",
@@ -72,6 +86,7 @@ def outcome_row(r):
         "%s/%s" % (tests.get("passed", "–"), tests.get("total", "–")),
         "%s/%s" % (acc.get("passed", "–"), acc.get("total", "–")),
         "✅" if a.get("plantedBugFixed") else "❌",
+        "%s%s" % (quality.get("testCases", "–"), "" if quality.get("reachesTheEndpoint") is None else (" ✅http" if quality.get("reachesTheEndpoint") else " ❌http")),
         "%+d" % (conv.get("blocking", FIXTURE_BLOCKING) - FIXTURE_BLOCKING) if conv else "–",
         "%s (%s ok)" % (git.get("commits", "–"), git.get("wellFormed", "–")),
     ]
@@ -96,10 +111,12 @@ def main():
     for r in rows:
         by_task[r["task"]].append(r)
     out = ["# Benchmark: superpowers alone vs agentic-sdd-flow", ""]
-    headers = ["arm", "status", "wall", "cost", "Σ model cost", "tokens", "turns", "agents", "tool calls", "build", "own tests", "acceptance", "planted bug", "Δ violations", "commits"]
+    headers = ["arm", "route", "status", "wall", "cost", "Σ model cost", "tokens", "turns", "agents", "tool calls", "build", "own tests", "acceptance", "planted bug", "tests written", "Δ violations", "commits"]
     totals = defaultdict(lambda: {"cost": 0.0, "model_cost": 0.0, "wall": 0.0, "acc": 0, "acc_total": 0, "bugs": 0, "n": 0})
     for task in sorted(by_task):
-        out += ["## %s" % task, "", table(headers, [outcome_row(r) for r in sorted(by_task[task], key=lambda r: r["arm"])]), ""]
+        meta = MANIFEST.get(task, {})
+        heading = "## %s%s" % (task, " — %s, %s (expected tier: %s)" % (meta["key"], meta["class"], meta["expectedTier"]) if meta else "")
+        out += [heading, "", table(headers, [outcome_row(r) for r in sorted(by_task[task], key=lambda r: r["arm"])]), ""]
         for r in sorted(by_task[task], key=lambda r: r["arm"]):
             t = totals[r["arm"]]
             t["cost"] += r["metrics"].get("costUsd") or 0
@@ -120,7 +137,24 @@ def main():
     out += ["## Totals", "", table(["arm", "runs", "cost", "Σ model cost", "wall", "acceptance", "planted bugs fixed", "Σ model cost per passed check"],
                                     [[arm, t["n"], money(t["cost"]), money(t["model_cost"]), minutes(t["wall"]), "%d/%d" % (t["acc"], t["acc_total"]), "%d/%d" % (t["bugs"], t["n"]),
                                       money(t["model_cost"] / t["acc"]) if t["acc"] else "–"] for arm, t in sorted(totals.items())]), ""]
-    out += ["Δ violations = blocking convention violations in the final tree minus the %d the fixture already carries. Acceptance = hidden HTTP checks against `dotnet run`. Stage minutes are arrival times of top-level Skill/Agent/Workflow dispatches; agent times come from the plugin's pulse (plugin arm) or nested tool events (baseline). cost = the CLI's `total_cost_usd`; Σ model cost = the sum of `modelUsage[*].costUSD`, which also counts agents that ran inside a Workflow." % FIXTURE_BLOCKING]
+    by_class = defaultdict(lambda: defaultdict(lambda: {"cost": 0.0, "acc": 0, "acc_total": 0, "n": 0}))
+    for r in rows:
+        klass = (r.get("taskMeta") or MANIFEST.get(r["task"], {})).get("class", "?")
+        cell = by_class[klass][r["arm"]]
+        cell["cost"] += model_cost(r["metrics"]) or r["metrics"].get("costUsd") or 0
+        acc = r.get("acceptance", {}).get("acceptance", {})
+        cell["acc"] += acc.get("passed", 0) or 0
+        cell["acc_total"] += acc.get("total", 0) or 0
+        cell["n"] += 1
+    if by_class:
+        order = ["simple", "medium", "complex", "vague"]
+        class_rows = []
+        for klass in sorted(by_class, key=lambda k: order.index(k) if k in order else 99):
+            for arm, cell in sorted(by_class[klass].items()):
+                class_rows.append([klass, arm, cell["n"], money(cell["cost"] / cell["n"] if cell["n"] else 0),
+                                   "%d/%d" % (cell["acc"], cell["acc_total"])])
+        out += ["## By task class", "", table(["class", "arm", "runs", "Σ model cost per run", "acceptance"], class_rows), ""]
+    out += ["Δ violations = blocking convention violations in the final tree minus the %d the fixture already carries. Acceptance = hidden HTTP checks against `dotnet run`. Stage minutes are arrival times of top-level Skill/Agent/Workflow dispatches; agent times come from the plugin's pulse (plugin arm) or nested tool events (baseline). cost = the CLI's `total_cost_usd`; Σ model cost = the sum of `modelUsage[*].costUSD`, which also counts agents that ran inside a Workflow. route = the tier the plugin arm actually ran, read off its own Workflow dispatches (quick = no workflow, light/standard = dotnet-sdd `mode`, deep = architecture-design ran). tests written = `[Fact]`/`[Theory]` count in the final tree, with ✅http when at least one test file drives the API through `WebApplicationFactory`/`CreateClient`." % FIXTURE_BLOCKING]
     print("\n".join(out))
 
 

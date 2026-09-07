@@ -1,7 +1,7 @@
 export const meta = {
   name: 'architecture-design',
   description: 'Design pipeline: drivers → current-state C4 → three lens proposals → judge panel → threat model → data review; after approval, ADRs and a spec for writing-plans',
-  whenToUse: 'From the dotnet-feature skill on the architectural path, or directly for a design question. First run without approvedProposalId (read-only); second run with it (writes ADRs and the spec).',
+  whenToUse: 'From the dotnet-feature skill on the architectural path, or directly for a design question. First run without approvedProposalId (read-only); second run with it (writes ADRs and the spec). Pass scope: "compact" for a change that stays inside one service.',
   phases: [
     { title: 'Drivers' },
     { title: 'Context', detail: 'current-state C4 per project, merged' },
@@ -27,8 +27,30 @@ const AGENT = {
 }
 const RULES_PREAMBLE = 'Read the plugin rules contract (rules/RULES-CONTRACT.md under the agentic-sdd-flow plugin root, or the <rules-contract> block already in your context) before anything else. The architecture-design skill and its references live under <plugin root>/skills/architecture-design/.\n'
 
-const { brief, projects, nfrs = '', workDir, adrDir, specsDir, judges = 3, approvedProposalId, slug } = args
+// Callers sometimes pass args as a JSON-encoded string; destructuring a primitive yields undefined
+// for every field and the literal "undefined" leaks into every dispatch prompt. Normalise first,
+// then fail fast when a required key is missing.
+let workflowArgs = args
+if (typeof workflowArgs === 'string') {
+  try { workflowArgs = JSON.parse(workflowArgs) } catch { workflowArgs = null }
+}
+if (!workflowArgs || typeof workflowArgs !== 'object' || Array.isArray(workflowArgs)) workflowArgs = {}
+const { brief, projects, nfrs = '', workDir, adrDir, specsDir, judges, approvedProposalId, slug, scope = 'full' } = workflowArgs
+// compact: the change stays inside one service — one judge focus instead of five, and the threat model and
+// the data review only when the brief actually crosses a trust boundary or touches a store. The panel itself
+// (three lenses, refutation, synthesis) stays: it is what the route is for. A one-service change that took
+// the full route consumed a whole 90-minute budget in the 0.2.7 benchmark.
+const compact = String(scope).toLowerCase() === 'compact'
+const trustBoundaryChange = workflowArgs.trustBoundaryChange !== false
+const dataChange = workflowArgs.dataChange !== false
 const FOCI = ['fit', 'simplicity', 'operations', 'data-safety', 'conformance']
+
+const missingArgs = [['brief', brief], ['projects', Array.isArray(projects) && projects.length ? projects : undefined], ['workDir', workDir], ['adrDir', adrDir], ['specsDir', specsDir], ['slug', slug]]
+  .filter(([, value]) => !value).map(([name]) => name)
+if (missingArgs.length) {
+  log(`workflow args missing: ${missingArgs.join(', ')}`)
+  return { status: 'blocked', openQuestions: [`Workflow args missing: ${missingArgs.join(', ')} — pass args as an object with brief/projects/workDir/adrDir/specsDir/slug`], workDir: workDir || '', drivers: null, proposals: [], decision: null, threats: null, data: null, unanswered: [], adrPaths: [], specPath: '' }
+}
 
 const DRIVER = { type: 'object', required: ['id', 'theme', 'statement', 'criticality', 'evidence'],
   properties: { id: { type: 'string' }, theme: { type: 'string' }, statement: { type: 'string' },
@@ -92,7 +114,7 @@ const contextResults = await parallel(projects.map(p => () => agent(
   `${common}Document the current-state architecture of project ${p.name} only. Read <plugin root>/skills/architecture-design/references/current-architecture.md, c4-model.md and sketch-conventions.md. Use Roslyn: roslyn-query.py ${p.solution} get_project_graph (an empty graph is a mis-bind — retry with the explicit path), get_endpoint_map, get_di_registrations, get_nuget_packages; grep for message contracts, cache keys, gRPC services, connection strings (names only, never values). Write ${workDir}/01-context-${p.name}.md as a C4 container/component description with an evidence table and the container view (plus a component view if the brief touches this project) as mermaid fences per sketch-conventions.md, and return the JSON.`,
   { schema: ARTIFACT, label: `context:${p.name}`, phase: 'Context' })))
 const contexts = contextResults.filter(Boolean)
-const merged = await agent(
+const merged = (compact && contexts.length <= 1) ? contexts[0] : await agent(
   `${common}Merge these per-project context documents into one current-state C4 (context + containers, and components for the projects the brief touches): ${contexts.filter(Boolean).map(c => c.artifact).join(', ')}. Keep the evidence tables; draw one context view and one merged container view as mermaid fences per <plugin root>/skills/architecture-design/references/sketch-conventions.md, reusing the per-project element ids. Write ${workDir}/01-current-c4.md and return the JSON.`,
   { schema: ARTIFACT, label: 'context:merge' })
 const currentC4 = merged ? merged.artifact : `${workDir}/01-current-c4.md`
@@ -109,7 +131,7 @@ if (proposals.length < 2) { log(`only ${proposals.length} proposal(s) returned �
 log(`${proposals.length} proposals: ${proposals.map(p => p.id).join(', ')}`)
 
 phase('Judge')
-const panelSize = Math.max(3, Math.min(5, Number(judges) || 3))
+const panelSize = Math.max(1, Math.min(5, Number(judges) || (compact ? 1 : 3)))
 const proposalFiles = proposals.map(p => `${p.id}: ${p.artifact}`).join('; ')
 const judgments = (await parallel(FOCI.slice(0, panelSize).map(focus => () => agent(
   `${common}Mode: score. Focus: ${focus}. Drivers: ${drivers.artifact}. Current state: ${currentC4}. Proposals: ${proposalFiles}. Score every proposal per your rubric and return the JUDGMENT JSON.`,
@@ -130,13 +152,15 @@ const decision = await agent(
 if (!decision) { log('synthesis returned nothing'); return { status: 'blocked', workDir, drivers, proposals, decision: null, threats: null, data: null, unanswered: [], adrPaths: [], specPath: '' } }
 const winner = proposals.find(p => p.id === decision.winnerId) || proposals[0]
 
-phase('Threats')
-const threats = await agent(
+const runThreats = !compact || trustBoundaryChange
+if (runThreats) phase('Threats')
+const threats = !runThreats ? null : await agent(
   `${common}Mode: audit (no source edits; write only the report file under the work directory). Threat-model the winning design ${winner.id} (${winner.artifact}, decision ${decision.artifact}) against the current state ${currentC4}. Load <plugin root>/skills/stride-threat-model/SKILL.md and threat-mitigation-mapping/SKILL.md; verify entry points with roslyn-query.py <solution> get_endpoint_map and get_di_registrations for the projects touched. Write ${workDir}/04-threat-model.md and return the JSON (ids T1…, severity critical/important/minor). Return JSON { artifact, threats: [{ id: "T1", category: <STRIDE category>, component, severity: critical|important|minor, mitigation }] }.`,
   { agentType: AGENT.security, schema: THREATS, label: 'threats' })
 
-phase('Data')
-const data = await agent(
+const runData = !compact || dataChange
+if (runData) phase('Data')
+const data = !runData ? null : await agent(
   `${common}Review the data model and migration implications of ${winner.id} (${winner.artifact}, decisions ${decision.artifact}) against the current state ${currentC4}. Deploy-window matrix, backfills, indexes on hot tables, rollback. Use the postgres-mcp / mssql-mcp tools when their environment is set; otherwise say "schema source: repository". Return the JSON (ids M1…). Return JSON { status: APPROVED|CHANGES_REQUESTED|BLOCKED, findings: [{ id: "M1", severity, issue }], sequence: [<expand/migrate/contract steps>] }.`,
   { agentType: AGENT.migration, schema: DATA, label: 'data' })
 

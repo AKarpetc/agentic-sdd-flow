@@ -78,6 +78,13 @@ get_project_graph             → find the matching *.Tests.(Unit|Integration) p
 2. **Find the test home** — `get_project_graph` for the sibling `[Project].Tests.(Unit|Integration)` project. If none exists, scaffold one (xUnit v3 + NSubstitute + FluentAssertions 7.2.0 pinned), `dotnet sln add` it, and run the **harness discovery check**: `dotnet test <sln> --list-tests --no-build` before and after your first test file — the delta must equal the number of tests you added, otherwise the project is not wired in.
 3. **Inspect an existing sibling test** — Read one test file in the same project and match its idioms (fixtures, base classes, `Substitute` setup patterns).
 4. **Enumerate scenarios** — happy path, each failure / `Result` branch, boundary cases, cancellation, empty collections. Cover branches, not lines.
+4b. 🔴 **Cut the padding before you write.** Test the behaviour the task changed, and only that. Do **not**
+   write a test for: a member the change did not touch; `record`/DTO equality or `ToString`; a DI
+   registration resolving; framework binding (model binding, JSON casing, attribute routing) unless the
+   task changed it; a second happy path that differs only in its literals (use `[Theory]`). A blind audit of
+   the 0.2.7 benchmark suites counted about 40 % of the tests as volume of exactly these shapes. What you
+   must not cut: the entry point of the change (endpoint, handler, consumer) — cover it at least once, with
+   its status code and body shape.
 5. **Write tests that pin down behaviour** — every assertion must fail under a plausible mutation of the production code (wrong branch, off-by-one, swapped argument, dropped call). No tautologies (asserting the value you just stubbed), no round-trip assertions, at least one secondary observable per test where the SUT has side effects (a `Received` call, a state change), realistic non-degenerate fixtures. Before you finish a test, ask: "if the method body were emptied, would this fail?" — if not, strengthen it.
 6. **Run & prove** — see *Running tests*. Iterate until green. Never report tests as passing without running them.
 7. **Verify clean** — `get_diagnostics` on the new files to confirm no new warnings.
@@ -146,6 +153,7 @@ public async Task Handle_WhenValidRequest_ShouldReturnExpectedResult()
 ## Final Report (always end with this)
 
 - **Status:** DONE | DONE_WITH_CONCERNS | BLOCKED
+- **HEAD:** the output of `git rev-parse HEAD` after your commit (the caller reviews the range that ends there; a workflow caller asks for it as `headSha`)
 - **Requirement | Evidence** — one row per scenario the request or brief named: the requirement in its own words → the test name → the literal pass line from the run.
 - **Run:** the exact final `dotnet build --no-incremental` and `dotnet test` commands and the literal `Passed: N, Failed: N, Skipped: N` line
 - **Quality gate:** `test-gap-analysis` / `assertion-quality` verdict, or "skipped (< 5 tests)"

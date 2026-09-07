@@ -138,6 +138,11 @@ left uncommitted in `workflows/` does exactly this); `resumeFromRunId` after edi
 cached rejection (fresh run, or plan hash in the prompt); the implementer creates `feature/<KEY>` even when
 told to commit on `main`; a workflow must never write outside `projectDir`.
 
+### 6.6 What was actually built
+
+0.2.8 implements §6.1–6.4 and adds the tier gate the proposal implies:
+[0.2.8-tiered-flow.md](0.2.8-tiered-flow.md).
+
 ### 6.5 How to verify
 
 Re-run `evals/benchmark` on 0.2.8 for T1–T4 with the same runner (prompt on stdin, `--workers 1` if sessions

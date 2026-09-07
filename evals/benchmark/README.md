@@ -1,16 +1,25 @@
 # End-to-end benchmark: superpowers alone vs agentic-sdd-flow
 
 Does the plugin make feature work better, faster or cheaper than the bare superpowers flow it builds
-on? This benchmark answers with numbers instead of impressions: the same three feature tasks, on
-the same real .NET solution, run twice — once with the plugin disabled and once with it on — and
-scored by the same external checks.
+on? This benchmark answers with numbers instead of impressions: the same feature tasks, on the same
+real .NET solution, run twice — once with the plugin disabled and once with it on — and scored by the
+same external checks.
+
+Since 0.2.8 the suite spans the whole size range — **simple, medium, complex, vague** (`tasks/tasks.json`)
+— because the interesting question is no longer "is the plugin better" but **"does it charge in
+proportion to the work"**. A flow that delivers a one-file fix for $32 loses to one that delivers it for
+$8, however good its tests are.
 
 ## What is compared
 
 | Arm | What runs | How it is selected |
 |---|---|---|
-| `baseline` | superpowers only: brainstorming → writing-plans → subagent-driven-development → finishing-a-development-branch | `--settings '{"enabledPlugins": {"agentic-sdd-flow@agentic-sdd-flow": false}}'` — no plugin hooks, no rules contract, no write gate, no plugin agents |
-| `plugin` | `/agentic-sdd-flow:dotnet-feature` end to end: design gate → plan → plan review → dotnet-sdd (implement, tests, debug, review, verify, fix, final review) | the installed plugin, as is |
+| `baseline` | superpowers only, **scaled by its own skills**: brainstorming first, and when brainstorming itself calls the change a spike or bounded, test-driven-development directly instead of a plan; otherwise writing-plans → subagent-driven-development → finishing-a-development-branch | `--settings '{"enabledPlugins": {"agentic-sdd-flow@agentic-sdd-flow": false}}'` — no plugin hooks, no rules contract, no write gate, no plugin agents |
+| `plugin` | `/agentic-sdd-flow:dotnet-feature` end to end, **tier chosen by its own sizing gate** (quick / light / standard / deep — never forced by the prompt) | the installed plugin, as is |
+
+🔴 **The baseline instruction changed in 0.2.8**: it used to force the full superpowers flow onto every
+task, which made the simple task a stacked deck. Baseline numbers from `results/bench-2026-09-06` are
+therefore not comparable with runs made after that change — re-measure both arms.
 
 Both arms get the identical prompt: the same preamble (`tasks/_preamble.md`: non-interactive, approve
 the recommended option at every gate, commit on `main`, never push, end with `STATUS/COMMITS/NOTES`),
@@ -27,7 +36,7 @@ a test summary the parser cannot read. Sessions of both arms still share one mac
 project name in one arm can still hit the other arm's `dotnet` build, test or smoke server — run with
 `--workers 1` when that must not happen.
 
-## The tasks (`tasks/T1.md`, `T2.md`, `T3.md`)
+## The tasks (`tasks/*.md`, indexed by `tasks/tasks.json`)
 
 Each task is a real feature on `fixture/` (a `dotnet new` solution: `Orders.Api` minimal host with an
 in-memory seeded repository, `Orders.Api.Tests` with xUnit + NSubstitute + FluentAssertions 7.2.0;
@@ -41,6 +50,12 @@ investigation resolves, so the debugging stage is exercised as well:
 | T2 | ORD-43 | `POST /api/orders/{id}/cancel` with 204/409/404 and ProblemDetails, persisted status, in-memory outbox exposed at `GET /api/outbox` | `OrderService.CanCancelAsync` says Placed **or Shipped** — the rule must be Placed or Paid, and the task names this method as the single source of the rule |
 | T3 | ORD-44 | `GET /api/customers/{id}/orders?page&size` — 1-based paging through the existing `PageMath.Skip`, validation with ProblemDetails | `PageMath.Skip` returns `page * size` (0-based); plus the T1 repository bug, since the listing goes through the same method |
 | T4 | ORD-45 | `GET /api/orders/{id}/pricing` with configured promotions (percentage / fixed / expired), a customer report at `GET /api/customers/{id}/report` through the existing `ReportService` — the brief is deliberately loose on structure and asks for extensibility and a controllable clock | the T1 repository bug again (the report goes through `ListByCustomerAsync`), plus the four convention violations sitting in the file the task must touch (`ReportService`) |
+| T5 | ORD-46 | **simple** — ProblemDetails bodies and id validation on the existing `GET /api/orders/{id}`. One file, no new surface: the cost floor of each flow | the endpoint answers a missing order with an empty 404 body today, so the `title`/`detail` check cannot pass without touching existing behaviour |
+| T6 | ORD-47 | **complex** — `POST /api/orders/{id}/transitions` with a legal-transition table, idempotency by `requestId`, an audit trail at `GET /api/orders/{id}/history`, and the rule kept in exactly one place with `CanCancelAsync` expressed through it | reusing the existing `CanCancelAsync` as the rule source keeps `Placed or Shipped`, and `104 Shipped → Cancelled` then answers 200 instead of 409 |
+| T7 | ORD-48 | **vague** — `GET /api/customers/{customerId}/attention`: the brief states the rule as business intent ("cancelled never, paid-not-shipped always, the rest is your judgement") and names no structure | the T1 repository bug again (the list goes through `ListByCustomerAsync`) |
+
+The task classes and the tier each one *should* cost are in `tasks/tasks.json`; `report.py` prints the
+tier the plugin arm actually ran next to the expected one, so a mis-sized route is visible per task.
 
 The fixture also carries four convention violations in `ReportService` (primary constructor,
 `IOptions<T>`, `DateTime.Now`, an inline comment) that neither arm is asked to touch — the
@@ -57,6 +72,12 @@ Objective, identical for both arms:
 - **Quality**: blocking convention violations in the final tree (the plugin's own gate, run as a
   scanner over every `.cs`) minus the four the fixture already has; commits and how many follow the
   `KEY: Description` form; uncommitted leftovers; files changed.
+- **Route**: the tier the plugin arm really took, derived from its own dispatches (no `Workflow` → `quick`;
+  `dotnet-sdd` with `mode: light` → `light`; `dotnet-sdd` → `standard`; `architecture-design` → `deep`),
+  compared with `expectedTier` in the manifest. It is never taken from what the session says it did.
+- **Test reach** (every task): `[Fact]`/`[Theory]` count in the final tree and whether any test file drives
+  the API through `WebApplicationFactory`/`CreateClient` — the 0.2.7 measurement found 0 % endpoint
+  coverage in every baseline tree.
 - **Cost and speed**: wall clock, `total_cost_usd`, input / output / cache tokens, turns, tool calls
   (top-level and inside subagents), number of agents dispatched.
 - **Stages**: the minute at which each top-level Skill / Agent / Workflow dispatch happened, and per
@@ -72,11 +93,15 @@ Objective, identical for both arms:
 ## How to run
 
 ```
-# one task, both arms, in parallel (about 30–90 min and $20–60 per session)
+# one task, both arms, in parallel (about 10–90 min and $6–60 per session, depending on the task class)
 python3 evals/benchmark/run.py --task T1 --out results/bench-$(date +%F) --workers 2
 
+# a whole class — the cheapest useful comparison is the two ends
+python3 evals/benchmark/run.py --class simple --class complex --out results/bench-$(date +%F) --workers 2
+
 # everything
-python3 evals/benchmark/run.py --task T1 --task T2 --task T3 --out results/bench-$(date +%F) --workers 2
+python3 evals/benchmark/run.py --task T1 --task T2 --task T3 --task T4 --task T5 --task T6 --task T7 \
+  --out results/bench-$(date +%F) --workers 2
 
 # only one arm, e.g. to re-run after a tuning change
 python3 evals/benchmark/run.py --task T2 --arm plugin --out results/bench-T2-retry
@@ -90,8 +115,8 @@ Run it from the plugin checkout with the plugin installed and updated to the ver
 `run.py` must not be started from inside a Claude Code session that would be killed before it ends —
 the runner is a plain Python process and the workspaces under `--out` keep every stream, so a killed
 run can still be scored afterwards with `acceptance.py <task> <workspace>`. Ports 5200+ must be free
-for the acceptance client. Expect the whole suite to take three to five hours of wall clock at two
-workers and roughly $150–300.
+for the acceptance client. Expect all seven tasks to take six to nine hours of wall clock at two workers
+and roughly $250–450; `--class simple --class complex` alone answers the sizing question for about $60–120.
 
 Before a run: `claude plugin list` shows the version you want to measure; `~/.agentic-sdd-flow/pulse/`
 is writable (the plugin arm's per-agent timing comes from it); nothing else heavy uses the machine
@@ -102,6 +127,9 @@ is writable (the plugin arm's per-agent timing comes from it); nothing else heav
 `report.py` prints one table per task (arm × outcome / quality / cost / speed), the dispatch timeline
 and the longest agents per arm, the failed acceptance checks, and totals. Questions it should answer:
 
+0. **Is the route proportionate?** the `route` column against the expected tier, and the *By task class*
+   table: cost per run must climb with the class. A `standard` route on the simple task, or a `quick`
+   route on the complex one, is the finding — it says the sizing gate, not the workflow, needs the fix.
 1. **Does the plugin deliver more of the criteria?** acceptance and planted-bug columns.
 2. **At what price?** cost, tokens and wall clock per delivered check (compute cost ÷ passed checks).
 3. **Is the code cleaner?** Δ violations and commit hygiene — the baseline has no gate, so anything
@@ -124,6 +152,8 @@ The 0.2.7 measurement (T1–T4), the quality analysis and the proposal for 0.2.8
 
 - Headless sessions cannot answer questions: a session that stops at a gate despite the preamble is
   a finding (both arms are told to self-approve), recorded as `STATUS` missing and a low acceptance score.
+- `deep` is not reachable on this fixture: it is one solution with no data store and no external contract,
+  so no task here can honestly demand the design pipeline. Measuring `deep` needs a multi-project fixture.
 - One run per (task, arm) is a sample, not a distribution. Two or three repetitions, or all three tasks,
   before drawing a conclusion; report.py aggregates whatever directories it is given.
 - Both arms share the same model, the same machine and the same user-scope MCP servers; the only

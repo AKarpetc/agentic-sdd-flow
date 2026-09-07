@@ -333,6 +333,81 @@ class WorkDistribution(unittest.TestCase):
                 self.assertEqual(set(declared), set(self.EXPECTED[name]))
 
 
+class Tiers(unittest.TestCase):
+    """0.2.8: the flow is sized before it runs, and the cheap route is a real route, not a promise."""
+
+    def sdd(self):
+        return read(os.path.join(ROOT, "workflows", "dotnet-sdd.js"))
+
+    def feature(self):
+        return read(os.path.join(ROOT, "skills", "dotnet-feature", "SKILL.md"))
+
+    def test_entry_skill_routes_by_tier(self):
+        text = self.feature()
+        for tier in ("quick", "light", "standard", "deep"):
+            self.assertIn("`%s`" % tier, text, "the entry skill must name the %s tier" % tier)
+        self.assertTrue(os.path.isfile(os.path.join(ROOT, "skills", "dotnet-feature", "references", "sizing.md")))
+        self.assertIn("mode: 'light'", text, "the light tier must reach the workflow as an argument")
+        self.assertIn("skipPlanReview: true", text, "the standard tier must not pay for the same plan review twice")
+        self.assertIn("scope: 'compact'", text, "the design pipeline must be sized too")
+
+    def test_sizing_reference_decides_from_the_brief(self):
+        text = read(os.path.join(ROOT, "skills", "dotnet-feature", "references", "sizing.md"))
+        for signal in ("Blast radius", "Surface", "Data", "Reach", "Specification"):
+            self.assertIn(signal, text)
+        self.assertIn("One tier up, never two", text)
+
+    def test_workflow_takes_a_mode_and_light_skips_the_per_task_gate(self):
+        text = self.sdd()
+        self.assertIn("mode = 'standard'", text)
+        self.assertIn("const light = String(mode).toLowerCase() === 'light'", text)
+        self.assertIn("workflowArgs.skipPlanReview === true || light", text, "light mode must not run the plan review")
+        self.assertIn("if (light || t.kind !== 'code')", text, "light mode must skip the per-task review loop")
+
+    def test_shas_ride_on_the_reports_instead_of_their_own_agents(self):
+        text = self.sdd()
+        self.assertLessEqual(text.count("await sha("), 2, "a git rev-parse per task per round was 35 % of the workflow's tokens")
+        self.assertIn("report.headSha", text)
+        self.assertIn("tests.headSha", text)
+        self.assertIn("baseSha: { type: 'string' }", text, "the analyze agent already runs Bash: it returns the base SHA")
+
+    def test_test_only_tasks_skip_the_implementer(self):
+        text = self.sdd()
+        self.assertIn("kind: { enum: ['code', 'tests', 'verify'] }", text)
+        self.assertIn("if (t.kind === 'code') {", text)
+
+    def test_a_defect_cannot_be_hidden_behind_a_low_severity(self):
+        text = self.sdd()
+        self.assertIn("kind: { enum: ['defect', 'convention', 'style'] }", text)
+        self.assertIn("f.severity !== 'minor' || f.kind === 'defect'", text, "minor defects must still reach the verifier")
+        self.assertIn("severityAdjustment", text)
+        review = read(os.path.join(ROOT, "skills", "dotnet-code-review", "SKILL.md"))
+        self.assertIn("Severity floor for defects", review)
+        self.assertIn("never below `important`", review)
+        verifier = read(os.path.join(ROOT, "agents", "findings-verifier.md"))
+        self.assertIn("severityAdjustment", verifier)
+
+    def test_minor_defects_are_fixed_in_the_final_wave(self):
+        text = self.sdd()
+        self.assertIn("const finalMinorDefects", text)
+        self.assertIn("const wave = [...blocking, ...finalMinorDefects]", text,
+                      "a minor defect must ride with the final fix wave instead of being deferred for ever")
+
+    def test_implementer_and_tests_writer_stay_on_the_branch_and_report_head(self):
+        implementer = read(os.path.join(ROOT, "agents", "dotnet-implementer.md"))
+        self.assertIn("Commit on the branch that is already checked out", implementer)
+        tests_writer = read(os.path.join(ROOT, "agents", "tests-writer.md"))
+        self.assertIn("git rev-parse HEAD", tests_writer)
+        self.assertIn("Cut the padding", tests_writer)
+
+    def test_design_pipeline_can_run_compact(self):
+        text = read(os.path.join(ROOT, "workflows", "architecture-design.js"))
+        self.assertIn("const compact = String(scope).toLowerCase() === 'compact'", text)
+        self.assertIn("const runThreats = !compact || trustBoundaryChange", text)
+        self.assertIn("const runData = !compact || dataChange", text)
+        self.assertIn("(compact ? 1 : 3)", text, "a compact panel scores once instead of five times")
+
+
 class Workflows(unittest.TestCase):
     workflows = sorted(glob.glob(os.path.join(ROOT, "workflows", "*.js")))
 

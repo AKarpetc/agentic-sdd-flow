@@ -1,5 +1,6 @@
 """The end-to-end benchmark stays runnable: tasks, arms, fixture and the checker agree with each other."""
 
+import glob
 import importlib.util
 import json
 import os
@@ -8,6 +9,7 @@ import unittest
 import _paths
 
 BENCH = os.path.join(_paths.PLUGIN_ROOT, "evals", "benchmark")
+MANIFEST = json.load(open(os.path.join(BENCH, "tasks", "tasks.json"), encoding="utf-8"))
 
 
 def load(name):
@@ -19,12 +21,45 @@ def load(name):
 
 class Benchmark(unittest.TestCase):
     def test_tasks_have_criteria_and_keys(self):
-        for task, key in (("T1", "ORD-42"), ("T2", "ORD-43"), ("T3", "ORD-44"), ("T4", "ORD-45")):
+        for task, meta in MANIFEST.items():
             with self.subTest(task=task):
                 text = open(os.path.join(BENCH, "tasks", task + ".md"), encoding="utf-8").read()
-                self.assertIn(key, text)
+                self.assertIn(meta["key"], text)
                 self.assertIn("Acceptance criteria", text)
                 self.assertIn("dotnet test", text)
+
+    def test_manifest_covers_every_class_and_agrees_with_the_files(self):
+        classes = {meta["class"] for meta in MANIFEST.values()}
+        self.assertEqual(classes, {"simple", "medium", "complex", "vague"}, "the suite must span the whole size range")
+        self.assertTrue({meta["expectedTier"] for meta in MANIFEST.values()} <= {"quick", "light", "standard", "deep"})
+        keys = [meta["key"] for meta in MANIFEST.values()]
+        self.assertEqual(len(keys), len(set(keys)), "task keys must be unique: git hygiene is scored per key")
+        files = {os.path.basename(p)[:-3] for p in glob.glob(os.path.join(BENCH, "tasks", "T*.md"))}
+        self.assertEqual(files, set(MANIFEST), "every task file needs a manifest entry and vice versa")
+
+    def test_runner_and_checker_take_the_keys_from_the_manifest(self):
+        run = load("run")
+        self.assertEqual(run.KEYS, {task: meta["key"] for task, meta in MANIFEST.items()})
+        self.assertIn('tasks.json', open(os.path.join(BENCH, "acceptance.py"), encoding="utf-8").read())
+
+    def test_route_is_read_off_the_dispatches_not_off_the_session(self):
+        run = load("run")
+        self.assertEqual(run.route_taken([]), "quick")
+        self.assertEqual(run.route_taken([{"tool": "Agent", "label": "agentic-sdd-flow:tests-writer"}]), "quick")
+        self.assertEqual(run.route_taken([{"tool": "Workflow", "label": "agentic-sdd-flow:dotnet-sdd", "mode": "light"}]), "light")
+        self.assertEqual(run.route_taken([{"tool": "Workflow", "label": "agentic-sdd-flow:dotnet-sdd"}]), "standard")
+        self.assertEqual(run.route_taken([{"tool": "Workflow", "label": "agentic-sdd-flow:architecture-design"},
+                                          {"tool": "Workflow", "label": "agentic-sdd-flow:dotnet-sdd"}]), "deep")
+        self.assertEqual(run.workflow_args({"args": '{"mode": "light", "plan": "x"}'}), {"mode": "light"})
+        self.assertEqual(run.workflow_args({"args": {"scope": "compact"}}), {"scope": "compact"})
+        self.assertEqual(run.workflow_args({"args": "not json"}), {})
+
+    def test_endpoint_coverage_is_measured_on_every_task(self):
+        acceptance = load("acceptance")
+        signals = acceptance.quality_common(os.path.join(BENCH, "fixture"))
+        self.assertEqual(signals["testFiles"], 0, "the fixture ships an empty test project")
+        self.assertFalse(signals["reachesTheEndpoint"])
+        self.assertEqual(signals["testCases"], 0)
 
     def test_preamble_defines_the_final_message_contract(self):
         text = open(os.path.join(BENCH, "tasks", "_preamble.md"), encoding="utf-8").read()
@@ -39,6 +74,14 @@ class Benchmark(unittest.TestCase):
         self.assertIsNone(arms["plugin"]["settings"])
         self.assertIn("superpowers:", arms["baseline"]["instruction"])
         self.assertIn("/agentic-sdd-flow:dotnet-feature", arms["plugin"]["instruction"])
+
+    def test_neither_arm_is_told_which_tier_to_run(self):
+        arms = json.load(open(os.path.join(BENCH, "tasks", "arms.json")))
+        self.assertNotIn("--tier", arms["baseline"]["instruction"])
+        self.assertIn("sizing gate", arms["plugin"]["instruction"])
+        self.assertIn("never pass --tier", arms["plugin"]["instruction"])
+        self.assertIn("respect its own sizing", arms["baseline"]["instruction"],
+                      "the baseline must be allowed to scale down too, or the simple task is a stacked deck")
 
     def test_prompts_carry_the_task_key_and_title(self):
         run = load("run")
@@ -93,8 +136,8 @@ class Benchmark(unittest.TestCase):
 
     def test_checker_covers_every_task(self):
         acceptance = load("acceptance")
-        self.assertEqual(set(acceptance.ACCEPTANCE), {"T1", "T2", "T3", "T4"})
-        self.assertEqual(set(acceptance.PLANTED), {"T1", "T2", "T3", "T4"})
+        self.assertEqual(set(acceptance.ACCEPTANCE), set(MANIFEST))
+        self.assertEqual(set(acceptance.PLANTED), set(MANIFEST))
         for task, fn in acceptance.ACCEPTANCE.items():
             checks = fn("http://127.0.0.1:1")  # nothing listens: every check fails, but the names must be stable
             with self.subTest(task=task):
