@@ -412,6 +412,13 @@ class Tiers(unittest.TestCase):
         self.assertIn("Do not read the full dotnet-code-review SKILL.md", text,
                       "a scoped re-review must not re-read the 326-line skill and the checklist")
 
+    def test_the_run_has_a_journal_and_tasks_inherit_their_dependencies(self):
+        text = self.sdd()
+        self.assertIn("journal.md", text, "the append-only scratchpad the next agent reads")
+        self.assertIn(">> ${JOURNAL}", text, "every agent appends exactly one line")
+        self.assertIn("const inherited = (t.dependsOn || [])", text, "dependsOn selects the reports a task inherits")
+        self.assertIn("read their reports before you start rather than reading their code", text)
+
     def test_review_mode_gates_a_branch_written_elsewhere(self):
         text = self.sdd()
         self.assertIn("const reviewOnly = String(mode).toLowerCase() === 'review'", text)

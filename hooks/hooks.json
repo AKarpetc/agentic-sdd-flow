@@ -64,6 +64,15 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Bash|mcp__cwm-roslyn-navigator__.*|mcp__plugin_agentic-sdd-flow_cwm-roslyn-navigator__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/context-pack.py\""
+          }
+        ]
       }
     ],
     "SubagentStop": [

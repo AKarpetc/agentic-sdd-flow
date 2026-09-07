@@ -180,7 +180,13 @@ const sha = (label) => agent(
 // The one thing agents can share in this harness is a file. The pack is produced once in Analyze and
 // replaces the project graph / package / endpoint / test-home orientation each agent would otherwise redo.
 let contextPack = ''
-const PACK = () => contextPack ? `Context pack (produced this run, authoritative for the solution layout, packages, endpoints, DI, the test project and the build/test commands): ${contextPack}. Read it before you touch the repository, and do not re-derive what it already states — spend your tool calls on the code this task is about. Report any line of it you find to be wrong.\n` : ''
+const JOURNAL = `${projectDir}/.superpowers/sdd/journal.md`
+// The workflow script cannot touch the filesystem, so the shared state lives in files the agents write:
+// the pack (orientation, written once) and the journal (an append-only line per agent — what it did and
+// what it learned that the pack could not predict). Together they are this run's State object; the prompt
+// is the only channel through which a fresh agent can be pointed at them.
+const PACK = () => (contextPack ? `Context pack (produced this run; authoritative for the solution layout, packages, endpoints, DI, the test project and the build/test commands): ${contextPack}. Read it before you touch the repository and do not re-derive what it states — a hook refuses those calls anyway. Report any line of it you find to be wrong.\n` : '')
+  + `Run journal: ${JOURNAL} — read it (it is short) before your first tool call; it is what the agents before you learned the hard way. When you finish, append exactly one line to it with Bash:\n  printf '%s\\n' "<agent> · <task or scope> · <what you changed or decided> · <what surprised you, or none>" >> ${JOURNAL}\nOne line, no re-writing of other lines, and only something the next agent would otherwise rediscover.\n`
 const describe = (f) => `- [${f.id}] ${f.file}${f.line ? ':' + f.line : ''} — (${f.kind || 'defect'}/${f.severity}) ${f.issue}`
 // A scoped re-review re-reads nothing: the rules digest is already injected into its context, and a fix diff
 // of a dozen lines does not need the 326-line review skill plus the 225-line checklist read again.
@@ -209,6 +215,8 @@ const analysis = reviewOnly ? { tasks: [], conflicts: [], baseSha: workflowArgs.
    - **The plan's Global Constraints** section, copied verbatim.
    - **Files the plan touches**, one line each: path → which task, and whether it exists today.
    Keep it under 200 lines and mark anything you could not determine as \`unknown\` rather than guessing.
+   Finally create the run journal ${projectDir}/.superpowers/sdd/journal.md with a one-line header
+   (\`# Run journal — <task key> — one line per agent: agent · scope · what changed · what surprised me\`) and one line of your own.
    For each task list the files it touches (from its Files block), the ids it depends on, and its kind:
    \`code\` when it changes production code, \`tests\` when the task only adds or repairs tests, \`verify\` when it only runs
    or inspects something already built (a smoke run, a coverage check, a documentation sweep with no code change).
@@ -248,8 +256,12 @@ const baseSha = analysis.baseSha || await sha('base-sha')
 let head = reviewOnly ? (workflowArgs.head || await sha('review-head')) : baseSha
 let aborted = false
 
+const reportPaths = new Map()
 for (const t of tasks) {
   if (aborted) break
+  // CrewAI's task context, made explicit: a task inherits the reports of the tasks it depends on, so the
+  // implementer reads what its predecessor decided instead of re-deriving it from the diff.
+  const inherited = (t.dependsOn || []).map(id => reportPaths.get(id)).filter(Boolean)
   let taskBase = head
   let report = null
 
@@ -259,6 +271,7 @@ for (const t of tasks) {
       const r = await agent(
         `${RULES_PREAMBLE}${PACK()}Working directory: ${projectDir}. Project: ${project}. Task key: ${taskKey}.
          Task ${t.id}: ${t.title}. Brief: ${t.briefPath}. Report file: ${projectDir}/.superpowers/sdd/task-${t.id}-report.md.
+         ${inherited.length ? `This task depends on ${(t.dependsOn || []).join(', ')}; read their reports before you start rather than reading their code: ${inherited.join(', ')}.` : ''}
          Commit on the branch that is already checked out — never create or switch a branch. Write only inside ${projectDir}.
          If the brief asserts a behaviour that the code, its tests, CI, an ADR, a doc or a consumer note contradicts, do not pick a side: stop before changing that behaviour, return status needs_context with the contradiction in \`contradictions\` (claim, observed with file:line, sources you saw) — the workflow reconciles it.
          ${answers[t.id] ? 'Answers to your earlier open questions: ' + JSON.stringify(answers[t.id]) : ''}
@@ -463,6 +476,7 @@ for (const t of tasks) {
     taskBase = head
   }
   minorDefects.push(...taskMinorDefects.map(f => ({ task: t.id, ...f })))
+  reportPaths.set(t.id, report.reportPath)
 }
 
 const unique = (list) => list.filter((d, i) => list.findIndex(x => x.file === d.file && x.issue === d.issue) === i)

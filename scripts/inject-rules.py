@@ -41,6 +41,16 @@ WORKING_BUDGET = """\
   `roslyn-query.py <solution> get_project_graph` fails or comes back empty after one retry with the
   explicit .sln path, do not restore, build, test or load again — switch to a static pass (Read, Grep)
   and say so in your report.
+- 🔴 **Take the context from disk, never re-derive it.** When your prompt names a context pack
+  (`.superpowers/sdd/context-pack.md`), read it as your first action and treat it as this run's truth for
+  the solution layout, the target frameworks, the packages that decide conventions, the endpoint map, the
+  DI registrations, the test project and the build/test commands. Do **not** run `get_project_graph`,
+  `get_dependency_graph`, `get_nuget_packages`, `get_endpoint_map` or `get_di_registrations`, and do not
+  hunt for the test project or probe which `dotnet test` syntax this repository uses — a PreToolUse hook
+  refuses those calls and hands you the pack's own text instead. The same holds for any report path you
+  are given (an implementer report, a diagnosis, a brief): read it rather than reconstructing what it says
+  from the code. Spend your tool calls on the code your task is actually about. If a line of the pack is
+  wrong, say so in your report — asking the same question a second time goes through.
 - Never run `dotnet restore`, `dotnet build` or `dotnet test` more than twice for the same failure; a
   third identical failure is a blocked result, not another attempt.
 - Ten minutes without a visible result (a commit, a finding, a written artefact) means stop: return
