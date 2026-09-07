@@ -40,6 +40,7 @@ investigation resolves, so the debugging stage is exercised as well:
 | T1 | ORD-42 | `GET /api/customers/{id}/orders/total` — non-cancelled sum via the repository, logic in the service layer | `InMemoryOrderRepository.ListByCustomerAsync` filters on `order.Id` instead of `order.CustomerId`: every total is 0 |
 | T2 | ORD-43 | `POST /api/orders/{id}/cancel` with 204/409/404 and ProblemDetails, persisted status, in-memory outbox exposed at `GET /api/outbox` | `OrderService.CanCancelAsync` says Placed **or Shipped** — the rule must be Placed or Paid, and the task names this method as the single source of the rule |
 | T3 | ORD-44 | `GET /api/customers/{id}/orders?page&size` — 1-based paging through the existing `PageMath.Skip`, validation with ProblemDetails | `PageMath.Skip` returns `page * size` (0-based); plus the T1 repository bug, since the listing goes through the same method |
+| T4 | ORD-45 | `GET /api/orders/{id}/pricing` with configured promotions (percentage / fixed / expired), a customer report at `GET /api/customers/{id}/report` through the existing `ReportService` — the brief is deliberately loose on structure and asks for extensibility and a controllable clock | the T1 repository bug again (the report goes through `ListByCustomerAsync`), plus the four convention violations sitting in the file the task must touch (`ReportService`) |
 
 The fixture also carries four convention violations in `ReportService` (primary constructor,
 `IOptions<T>`, `DateTime.Now`, an inline comment) that neither arm is asked to touch — the
@@ -62,6 +63,11 @@ Objective, identical for both arms:
   agent its duration and tool count — from the plugin's pulse file for workflow agents, from nested
   stream events for baseline subagents.
 - **Self-report**: the `STATUS` line the session ends with, compared with what the checks found.
+- **T4 design signals** (`quality` block): a clock abstraction present (`TimeProvider` / `I*Clock`), system-clock
+  calls outside it, `IOptions<T>` vs `IOptionsSnapshot`/`IOptionsMonitor`, promotions really in `appsettings`,
+  promotion kinds as separate types, and whether `ReportService` kept its primary constructor. These are
+  the differences a convention gate and a reviewer are supposed to make; the blind comparative reviews
+  in the results directory cover what a grep cannot.
 
 ## How to run
 

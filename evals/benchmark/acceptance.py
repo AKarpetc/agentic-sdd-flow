@@ -153,8 +153,57 @@ def acceptance_t3(base):
     return checks
 
 
-ACCEPTANCE = {"T1": acceptance_t1, "T2": acceptance_t2, "T3": acceptance_t3}
-PLANTED = {"T1": "total customer 1 = 37.75", "T2": "cancel 102 -> 204", "T3": "customer 1 page 1 size 2 -> [101, 102] of 4"}
+def acceptance_t4(base):
+    checks = []
+    for oid, subtotal, discounts, total in ((101, 10.0, [], 10.0), (102, 20.5, [("PCT10", 2.05)], 18.45),
+                                             (201, 100.0, [("PCT10", 10.0), ("FIVEOFF", 5.0)], 85.0), (104, 7.25, [], 7.25)):
+        status, body = http("GET", f"{base}/api/orders/{oid}/pricing")
+        got = [(str(d.get("code")), d.get("amount")) for d in body.get("discounts", [])] if isinstance(body, dict) and isinstance(body.get("discounts"), list) else None
+        ok = status == 200 and isinstance(body, dict) and str(body.get("orderId")) == str(oid) and near(body.get("subtotal"), subtotal) \
+            and near(body.get("total"), total) and got is not None and [c for c, _ in got] == [c for c, _ in discounts] \
+            and all(near(a, b) for (_, a), (_, b) in zip(got, discounts))
+        checks.append({"name": f"pricing {oid} -> total {total} via {[c for c, _ in discounts]}", "ok": ok, "detail": f"{status} {str(body)[:160]}"})
+    status, body = http("GET", f"{base}/api/orders/103/pricing")
+    checks.append({"name": "pricing cancelled 103 -> 409 with title", "ok": status == 409 and isinstance(body, dict) and bool(body.get("title")), "detail": f"{status} {str(body)[:120]}"})
+    status, body = http("GET", f"{base}/api/orders/999/pricing")
+    route_exists = checks[0]["ok"]  # without the route every id is a 404, which must not count
+    checks.append({"name": "pricing unknown 999 -> 404", "ok": status == 404 and route_exists, "detail": f"{status} {str(body)[:120]}"})
+    for cid, needle in ((2, "15.00"), (1, "2.05")):
+        status, body = http("GET", f"{base}/api/customers/{cid}/report")
+        checks.append({"name": f"report customer {cid} contains {needle}", "ok": status == 200 and needle in str(body), "detail": f"{status} {str(body)[:160]}"})
+    return checks
+
+
+ACCEPTANCE = {"T1": acceptance_t1, "T2": acceptance_t2, "T3": acceptance_t3, "T4": acceptance_t4}
+PLANTED = {"T1": "total customer 1 = 37.75", "T2": "cancel 102 -> 204", "T3": "customer 1 page 1 size 2 -> [101, 102] of 4",
+           "T4": "report customer 2 contains 15.00"}
+
+
+def quality_t4(workspace):
+    """Design signals the T4 brief asks for without naming a mechanism: a controllable clock, options done the
+    plugin's way, promotions in configuration, promotion kinds as separate types."""
+    src = {}
+    for path in glob.glob(os.path.join(workspace, "src", "**", "*.cs"), recursive=True):
+        if not re.search(r"[/\\](obj|bin)[/\\]", path):
+            src[os.path.relpath(path, workspace)] = open(path, encoding="utf-8-sig").read()
+    clock_files = [p for p, t in src.items() if re.search(r"\bTimeProvider\b|I\w*Clock\b", t)]
+    system_clock = {p: len(re.findall(r"DateTime(?:Offset)?\.(?:Now|UtcNow)", t)) for p, t in src.items()}
+    system_clock = {p: n for p, n in system_clock.items() if n and not re.search(r"Clock|TimeProvider", p)}
+    settings = ""
+    for name in ("appsettings.json", "appsettings.Development.json"):
+        path = os.path.join(workspace, "src", "Orders.Api", name)
+        if os.path.exists(path):
+            settings += open(path, encoding="utf-8-sig").read()
+    kinds = [p for p, t in src.items() if re.search(r"(?:class|record)\s+\w*(?:Percent|Percentage|Fixed|Amount)\w*(?:Promotion|Discount|Rule)\b", t)]
+    return {
+        "clockAbstraction": bool(clock_files), "clockFiles": clock_files,
+        "systemClockCallsOutsideClock": sum(system_clock.values()), "systemClockFiles": system_clock,
+        "iOptionsUsages": sum(t.count("IOptions<") for t in src.values()),
+        "iOptionsSnapshotOrMonitorUsages": sum(len(re.findall(r"IOptions(?:Snapshot|Monitor)<", t)) for t in src.values()),
+        "promotionsInAppsettings": '"Promotions"' in settings,
+        "promotionKindTypes": kinds,
+        "reportServiceStillHasPrimaryCtor": bool(re.search(r"class ReportService\s*\(", src.get(os.path.join("src", "Orders.Api", "Services", "ReportService.cs"), ""))),
+    }
 
 
 def conventions(workspace):
@@ -195,7 +244,7 @@ def main():
     parser.add_argument("workspace")
     parser.add_argument("--port", type=int, default=5177)
     args = parser.parse_args()
-    key = {"T1": "ORD-42", "T2": "ORD-43", "T3": "ORD-44"}[args.task]
+    key = {"T1": "ORD-42", "T2": "ORD-43", "T3": "ORD-44", "T4": "ORD-45"}[args.task]
     result = {"task": args.task, "build": build(args.workspace)}
     result["tests"] = tests(args.workspace) if result["build"]["ok"] else {"ok": False, "passed": 0, "failed": 0, "total": 0, "tail": "no build"}
     checks = []
@@ -211,6 +260,8 @@ def main():
     result["acceptance"] = {"passed": sum(c["ok"] for c in checks), "total": len(checks) or len(ACCEPTANCE[args.task]("http://127.0.0.1:1")), "checks": checks}
     result["plantedBugFixed"] = any(c["ok"] and c["name"] == PLANTED[args.task] for c in checks)
     result["conventions"] = conventions(args.workspace)
+    if args.task == "T4":
+        result["quality"] = quality_t4(args.workspace)
     result["git"] = git_hygiene(args.workspace, key)
     print(json.dumps(result, indent=2))
 

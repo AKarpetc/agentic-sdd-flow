@@ -22,7 +22,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FIXTURE = os.path.join(HERE, "fixture")
 TASKS = os.path.join(HERE, "tasks")
 ACCEPTANCE = os.path.join(HERE, "acceptance.py")
-KEYS = {"T1": "ORD-42", "T2": "ORD-43", "T3": "ORD-44"}
+KEYS = {"T1": "ORD-42", "T2": "ORD-43", "T3": "ORD-44", "T4": "ORD-45"}
 TOOLS = ["Bash", "Read", "Write", "Edit", "MultiEdit", "Glob", "Grep", "Agent", "Skill", "Workflow", "TodoWrite", "TaskOutput", "Monitor"]
 
 

@@ -19,7 +19,7 @@ def load(name):
 
 class Benchmark(unittest.TestCase):
     def test_tasks_have_criteria_and_keys(self):
-        for task, key in (("T1", "ORD-42"), ("T2", "ORD-43"), ("T3", "ORD-44")):
+        for task, key in (("T1", "ORD-42"), ("T2", "ORD-43"), ("T3", "ORD-44"), ("T4", "ORD-45")):
             with self.subTest(task=task):
                 text = open(os.path.join(BENCH, "tasks", task + ".md"), encoding="utf-8").read()
                 self.assertIn(key, text)
@@ -82,10 +82,19 @@ class Benchmark(unittest.TestCase):
         self.assertEqual(sum(s[3] for s in summaries), 10)
         self.assertEqual(acceptance.SUMMARY.findall("Не пройден!: не пройдено 1, пройдено 1, всего 2"), [])
 
+    def test_t4_quality_signals_on_the_untouched_fixture(self):
+        acceptance = load("acceptance")
+        q = acceptance.quality_t4(os.path.join(BENCH, "fixture"))
+        self.assertFalse(q["clockAbstraction"])
+        self.assertEqual(q["systemClockCallsOutsideClock"], 1, "ReportService.DateTime.Now")
+        self.assertEqual(q["iOptionsUsages"], 1)
+        self.assertFalse(q["promotionsInAppsettings"])
+        self.assertTrue(q["reportServiceStillHasPrimaryCtor"])
+
     def test_checker_covers_every_task(self):
         acceptance = load("acceptance")
-        self.assertEqual(set(acceptance.ACCEPTANCE), {"T1", "T2", "T3"})
-        self.assertEqual(set(acceptance.PLANTED), {"T1", "T2", "T3"})
+        self.assertEqual(set(acceptance.ACCEPTANCE), {"T1", "T2", "T3", "T4"})
+        self.assertEqual(set(acceptance.PLANTED), {"T1", "T2", "T3", "T4"})
         for task, fn in acceptance.ACCEPTANCE.items():
             checks = fn("http://127.0.0.1:1")  # nothing listens: every check fails, but the names must be stable
             with self.subTest(task=task):
