@@ -24,11 +24,13 @@ difference between them *is* the measurement.
 | T6 | complex | **plugin (after)** | `mix` | **24.4 min** | **$13.31** | 10/10 | ✅ | 29 | ✅ | +0 | 10 |
 | T4 | vague | superpowers | – | 52.0 min | $21.22 | 8/8 | ✅ | 44 | **❌** | −4 | 17 |
 | T4 | vague | plugin | `standard` | 90 min (killed at the cap) | ≈$40 (not recorded) | 8/8 | ✅ | 25 | ✅ | −4 | 36 |
+| T8 | conflict (truth = brief) | superpowers | – | 7.8 min | $3.67 | 4/4 | ✅ | 10 | ✅ | −3 | 0 |
 | T8 | conflict (truth = brief) | plugin | `mix` | 12.1 min | $7.07 | 4/4 | ✅ | 10 | ✅ | −4 | 2 |
 | T9 | conflict (truth = code) | superpowers | – | 6.9 min | $4.01 | **1/4** | ❌ | 9 | ✅ | −3 | 0 |
+| T9 | conflict (truth = code) | **plugin** | `mix` | 18.1 min | $8.53 | **4/4** | ✅ | 13 | ✅ | −4 | 5 |
 
-Pending at the time of writing: T8 baseline, T9 plugin, the T7 pair — voided by an account session limit
-at 15:00Z and re-run afterwards (`results/void-session-limit/` keeps the killed sessions as evidence).
+Pending at the time of writing: the T7 pair. Three cells were voided by an account session limit at 15:00Z
+and re-run afterwards; `results/void-session-limit/` keeps the killed sessions as evidence.
 
 ## 2. What the routing fix bought
 
@@ -54,14 +56,30 @@ Three findings, in order of strength.
 
 **a. The conflict class — the only place where a flow *broke* something.** T9 gives the same brief as T8,
 but the repository's records (ADR-0003, the CI smoke pin `"4 orders"`, the finance-export consumer note,
-the changelog, the XML doc) back the **code**, and the brief is wrong. Bare superpowers scored **1/4**:
-it noticed the contradiction, then ruled for the ticket on its own authority — marked ADR-0003
-*Superseded*, wrote its own ADR-0004, rewrote the docs and the consumer note, and **flipped the CI guard
-from `"4 orders"` to `"3 orders"` in the same commit**, disabling the one check that would have caught the
-break. Its own notes flag "finance-export ledger reconciliation as needing coordination" — and it proceeded
-anyway. No acceptance test catches that; only the rule that a contradiction belongs to its owner does.
-On T8, where the records back the brief, the plugin scored 4/4: fixed the code at its root, left every
-record alone, kept the CI pin, and reasoned about the sources explicitly in its final message.
+the changelog, the XML doc) back the **code**, and the brief is wrong.
+
+| | bare superpowers | plugin |
+|---|---|---|
+| acceptance | **1/4** | **4/4** |
+| ADR-0003 | marked *Superseded*, replaced by a self-written ADR-0004 | untouched |
+| CI guard `smoke-report` | **flipped from `"4 orders"` to `"3 orders"`** | left at `"4 orders"` |
+| `docs/reporting.md` | rewritten to the brief's rule | extended, still states the recorded rule |
+| consumer note | rewritten | untouched |
+| the real defect behind the complaint | found | found |
+| cost / wall | $4.01 / 6.9 min | $8.53 / 18.1 min |
+
+Both arms *noticed* the contradiction — this is not an attention failure. The difference is authority:
+bare superpowers ruled for the ticket by itself, and its own notes flag "finance-export ledger
+reconciliation as needing coordination" while it proceeds anyway and disables, in the same commit, the one
+check that would have caught the break. The plugin dispatched `evidence-reconciler` **before changing
+anything** (at minute 1.4 of 18), got `code` at high confidence — "ADR-0003 (finance sign-off required),
+the CI smoke literal, and the finance-export consumer all fix N as every order" — implemented the recorded
+behaviour, and left every record where it was. No acceptance test catches this difference on its own; only
+the rule that a contradiction belongs to its owner does.
+
+On T8, where the records back the brief, **both arms scored 4/4**. That is the honest shape of this class:
+it discriminates in one direction only — when the brief is the thing that is wrong. When the ticket is
+right, doing what the ticket says needs no judgement.
 
 **b. Endpoint tests on a loose brief.** On T4 the baseline wrote 44 tests and **never started the host**;
 the plugin wrote 25 and drove the API over HTTP. This is the 0.2.7 finding reproduced on a different model.
