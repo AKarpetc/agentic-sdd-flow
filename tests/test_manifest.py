@@ -400,6 +400,18 @@ class Tiers(unittest.TestCase):
         self.assertIn("git rev-parse HEAD", tests_writer)
         self.assertIn("Cut the padding", tests_writer)
 
+    def test_agents_share_one_context_pack_instead_of_re_deriving(self):
+        text = self.sdd()
+        self.assertIn("context-pack.md", text, "the Analyze phase writes the pack once")
+        self.assertIn("contextPack: { type: 'string' }", text)
+        self.assertIn("const PACK = ()", text)
+        self.assertGreaterEqual(text.count("${PACK()}"), 5, "every dispatched agent must be handed the pack")
+        self.assertIn("get_nuget_packages", text, "the pack settles the convention-deciding packages once")
+        self.assertIn("read it instead of reconstructing the change from the diff", text,
+                      "tests-writer gets the implementer's report rather than re-deriving intent")
+        self.assertIn("Do not read the full dotnet-code-review SKILL.md", text,
+                      "a scoped re-review must not re-read the 326-line skill and the checklist")
+
     def test_review_mode_gates_a_branch_written_elsewhere(self):
         text = self.sdd()
         self.assertIn("const reviewOnly = String(mode).toLowerCase() === 'review'", text)

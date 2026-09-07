@@ -38,6 +38,7 @@ const TASKS = {
   type: 'object', required: ['tasks', 'conflicts'],
   properties: {
     baseSha: { type: 'string' },
+    contextPack: { type: 'string' },
     tasks: { type: 'array', items: {
       type: 'object', required: ['id', 'title', 'briefPath', 'files'],
       properties: {
@@ -176,8 +177,15 @@ const sha = (label) => agent(
   `Run \`git -C ${projectDir} rev-parse HEAD\` and return the SHA.`,
   { schema: SHA, effort: 'low', label, phase: 'Analyze' }).then(r => (r && r.sha) || 'HEAD')
 
+// The one thing agents can share in this harness is a file. The pack is produced once in Analyze and
+// replaces the project graph / package / endpoint / test-home orientation each agent would otherwise redo.
+let contextPack = ''
+const PACK = () => contextPack ? `Context pack (produced this run, authoritative for the solution layout, packages, endpoints, DI, the test project and the build/test commands): ${contextPack}. Read it before you touch the repository, and do not re-derive what it already states — spend your tool calls on the code this task is about. Report any line of it you find to be wrong.\n` : ''
 const describe = (f) => `- [${f.id}] ${f.file}${f.line ? ':' + f.line : ''} — (${f.kind || 'defect'}/${f.severity}) ${f.issue}`
-const reviewPrompt = (base, head, extra) => `${RULES_PREAMBLE}Working directory: ${projectDir}. Project: ${project}.
+// A scoped re-review re-reads nothing: the rules digest is already injected into its context, and a fix diff
+// of a dozen lines does not need the 326-line review skill plus the 225-line checklist read again.
+const SCOPED = 'This is a scoped re-review of a small fix diff: work from the injected rules contract, the context pack and the diff. Do not read the full dotnet-code-review SKILL.md or the rule-compliance checklist — walk the changed lines against the contract you already have.\n'
+const reviewPrompt = (base, head, extra, scoped) => `${RULES_PREAMBLE}${PACK()}${scoped ? SCOPED : ''}Working directory: ${projectDir}. Project: ${project}.
 ${plan ? `Run in Bash: ${SP_LOOKUP}; cd ${projectDir}; "$SP/review-package" ${plan} ${base} ${head}` : `Run in Bash: cd ${projectDir}; git diff --stat ${base}..${head} && git diff ${base}..${head} > .superpowers/review-${base}..${head}.diff (create .superpowers first)`}
 Then review the printed diff file per the dotnet-code-review skill (Roslyn first via roslyn-query.py).
 A violation of the conventions contract is at least Important. ${extra}
@@ -189,6 +197,18 @@ const analysis = reviewOnly ? { tasks: [], conflicts: [], baseSha: workflowArgs.
   `${RULES_PREAMBLE}Plan file: ${plan}. Working directory: ${projectDir}.
    Run in Bash: ${SP_LOOKUP}; cd ${projectDir}; for every "### Task N" heading in the plan run "$SP/task-brief" ${plan} N
    and return the printed brief path for each task. In the same Bash call run \`git -C ${projectDir} rev-parse HEAD\` and return it as baseSha.
+
+   Then build the **context pack** — this run's shared orientation, so that the twenty-odd agents after you do
+   not each re-derive it. Write ${projectDir}/.superpowers/sdd/context-pack.md (create the directory) and return
+   its path as contextPack. Produce every section from one pass of the tools, and write nothing you did not observe:
+   - **Solution**: the .sln/.slnx path, the projects and their references, the target framework(s) — \`roslyn-query.py ${project} get_project_graph\`.
+   - **Packages that decide conventions**: \`get_nuget_packages\` — Mediator vs MediatR, the FluentAssertions major, the mocking library, the xUnit major, the test SDK (VSTest or Microsoft.Testing.Platform, which changes the \`dotnet test\` filter syntax).
+   - **Entry points**: \`get_endpoint_map\` (routes → handlers) and \`get_di_registrations\` for the projects the plan touches.
+   - **Test home**: the test project the plan's tests belong in, its framework and package versions, and the path of one existing test file that is idiomatic for it (or "none — scaffold needed").
+   - **Build & test commands** that work in this repository, verified once by running them: the build command, the full test command, and the narrow-filter form for a single class.
+   - **The plan's Global Constraints** section, copied verbatim.
+   - **Files the plan touches**, one line each: path → which task, and whether it exists today.
+   Keep it under 200 lines and mark anything you could not determine as \`unknown\` rather than guessing.
    For each task list the files it touches (from its Files block), the ids it depends on, and its kind:
    \`code\` when it changes production code, \`tests\` when the task only adds or repairs tests, \`verify\` when it only runs
    or inspects something already built (a smoke run, a coverage check, a documentation sweep with no code change).
@@ -198,6 +218,7 @@ if (!analysis) {
   log('analyze agent returned nothing')
   return { status: 'blocked', mode: light ? 'light' : 'standard', done, rulings, deferred, openQuestions: ['The plan could not be analysed — check the plan path and rerun.'], finalVerdict: null, range: '' }
 }
+contextPack = analysis.contextPack || ''
 const tasks = analysis.tasks.map(t => ({ ...t, kind: ['code', 'tests', 'verify'].includes(t.kind) ? t.kind : 'code' }))
 if (!tasks.length && !reviewOnly) {
   log('no "### Task N" headings found in the plan')
@@ -211,7 +232,7 @@ let planVerdict = null
 if (!skipPlanReview && !reviewOnly) {
   phase('Plan review')
   planVerdict = await agent(
-    `${RULES_PREAMBLE}Working directory: ${projectDir}. Project: ${project}. Task key: ${taskKey}. Plan: ${plan}. ${spec ? 'Spec: ' + spec + '.' : 'No spec file was given: review against the plan\'s own Goal/Context sections.'}
+    `${RULES_PREAMBLE}${PACK()}Working directory: ${projectDir}. Project: ${project}. Task key: ${taskKey}. Plan: ${plan}. ${spec ? 'Spec: ' + spec + '.' : 'No spec file was given: review against the plan\'s own Goal/Context sections.'}
      Review the plan per your agent instructions and return the JSON verdict.`,
     { agentType: AGENT.planReviewer, schema: PLAN_VERDICT, label: 'plan-review' })
   const blockingPlan = planVerdict ? planVerdict.findings.filter(f => f.severity !== 'minor') : []
@@ -236,7 +257,7 @@ for (const t of tasks) {
     phase('Implement')
     for (let attempt = 0; attempt < 2 && !report; attempt++) {
       const r = await agent(
-        `${RULES_PREAMBLE}Working directory: ${projectDir}. Project: ${project}. Task key: ${taskKey}.
+        `${RULES_PREAMBLE}${PACK()}Working directory: ${projectDir}. Project: ${project}. Task key: ${taskKey}.
          Task ${t.id}: ${t.title}. Brief: ${t.briefPath}. Report file: ${projectDir}/.superpowers/sdd/task-${t.id}-report.md.
          Commit on the branch that is already checked out — never create or switch a branch. Write only inside ${projectDir}.
          If the brief asserts a behaviour that the code, its tests, CI, an ADR, a doc or a consumer note contradicts, do not pick a side: stop before changing that behaviour, return status needs_context with the contradiction in \`contradictions\` (claim, observed with file:line, sources you saw) — the workflow reconciles it.
@@ -304,7 +325,8 @@ for (const t of tasks) {
   const scope = t.kind === 'verify'
     ? `Do not add tests. Run the existing suite, confirm what task ${t.id} (${t.title}) asks to verify, and report the literal Passed/Failed/Skipped line.`
     : `Cover the changes of task ${t.id} (${t.title}; files: ${t.files.join(', ')}) with tests per the test conventions, run them, and commit as "${taskKey}: Add tests for ${t.title}".`
-  const testsPrompt = (extra) => `${RULES_PREAMBLE}Working directory: ${projectDir}. Project: ${project}. ${scope}
+  const testsPrompt = (extra) => `${RULES_PREAMBLE}${PACK()}Working directory: ${projectDir}. Project: ${project}. ${scope}
+     What the implementer just did, in its own words — read it instead of reconstructing the change from the diff: ${report.reportPath}.
      Test only the behaviour this task changed. Do not write tests for untouched members, for record/DTO equality, for DI registration, or for framework binding — the auditors count those as padding. One strong test per branch beats three duplicated happy paths; cover the endpoint or entry point of the change at least once.
      The solution was just built by the previous agent: prefer \`dotnet test --no-restore\` and rebuild only what you changed.
      Return status, the literal Passed/Failed/Skipped line as summary, and the commit SHA of HEAD as headSha (\`git -C ${projectDir} rev-parse HEAD\`). ${extra}`
@@ -315,7 +337,7 @@ for (const t of tasks) {
     // Red tests are a symptom, not a task: diagnose to root cause, then hand the fix to the implementer once.
     phase('Debug')
     const diagnosis = await agent(
-      `${RULES_PREAMBLE}Working directory: ${projectDir}. Project: ${project}. Task ${t.id}: ${t.title}. Brief: ${t.briefPath}. Implementer report: ${report.reportPath}.
+      `${RULES_PREAMBLE}${PACK()}Working directory: ${projectDir}. Project: ${project}. Task ${t.id}: ${t.title}. Brief: ${t.briefPath}. Implementer report: ${report.reportPath}.
        The tests-writer could not get the tests green: ${tests ? tests.summary : 'no report'}. Diagnose to root cause per your agent instructions, write ${projectDir}/.superpowers/sdd/task-${t.id}-diagnosis.md and return the DIAGNOSIS JSON.`,
       { agentType: AGENT.debugger, schema: DIAGNOSIS, label: `debug#${t.id}` })
     if (diagnosis && diagnosis.confidence !== 'low') {
@@ -354,7 +376,7 @@ for (const t of tasks) {
     const verdict = await agent(
       reviewPrompt(taskBase, head, round
         ? `This is a scoped re-review of a fix round. Prior findings:\n${feedback.map(describe).join('\n')}\nFirst verdict each prior finding as addressed true/false, then review only the fix diff.`
-        : `Review against the brief ${t.briefPath}.`),
+        : `Review against the brief ${t.briefPath}.`, Boolean(round)),
       { agentType: AGENT.reviewer, schema: VERDICT, label: `review#${t.id}.${round}`, effort: (round || cheapRound0) ? 'low' : undefined })
     if (!verdict) {
       rulings.push({ task: t.id, stage: 'review', status: 'no_verdict', round })
@@ -374,7 +396,7 @@ for (const t of tasks) {
     const candidates = verdict.findings.filter(f => f.severity !== 'minor' || f.kind === 'defect')
     deferred.push(...verdict.findings.filter(f => f.severity === 'minor' && f.kind !== 'defect').map(f => ({ task: t.id, ...f })))
     const votes = await parallel(candidates.map(f => () => agent(
-      `${RULES_PREAMBLE}Working directory: ${projectDir}. Diff range ${taskBase}..${head}. Verify this finding: ${JSON.stringify(f)}
+      `${RULES_PREAMBLE}${PACK()}Working directory: ${projectDir}. Diff range ${taskBase}..${head}. Verify this finding: ${JSON.stringify(f)}
        If it is real, also return severityAdjustment: the severity it deserves once you have seen the code (\`none\` to keep the reviewer's).`,
       { agentType: AGENT.verifier, schema: VERIFY, label: `verify#${t.id}.${round}`, effort: 'low' })))
     const real = candidates.map((f, i) => {
@@ -406,7 +428,7 @@ for (const t of tasks) {
       // A round that closed nothing means the implementer is fixing the wrong thing: diagnose before trying again.
       phase('Debug')
       const diagnosis = await agent(
-        `${RULES_PREAMBLE}Working directory: ${projectDir}. Project: ${project}. Task ${t.id}: ${t.title}. Brief: ${t.briefPath}. Implementer report: ${report.reportPath}.
+        `${RULES_PREAMBLE}${PACK()}Working directory: ${projectDir}. Project: ${project}. Task ${t.id}: ${t.title}. Brief: ${t.briefPath}. Implementer report: ${report.reportPath}.
          The last fix round closed none of these review findings:\n${blocking.map(describe).join('\n')}
          Find out why (wrong root cause, wrong file, a test pinning the old behaviour, a finding that is not real) per your agent instructions, write ${projectDir}/.superpowers/sdd/task-${t.id}-r${round}-diagnosis.md and return the DIAGNOSIS JSON.`,
         { agentType: AGENT.debugger, schema: DIAGNOSIS, label: `debug#${t.id}.${round}` })
@@ -492,7 +514,7 @@ if (!aborted) {
       const recheck = await agent(
         reviewPrompt(baseSha, finalHead, blocking.length
           ? `Scoped re-review: verdict each of these as addressed true/false, then review the fix diff only:\n${wave.map(describe).join('\n')}`
-          : `Scoped check only — no new review. Verdict each of these minor defects as addressed true/false against the fix diff and return no new findings unless the fix broke something:\n${wave.map(describe).join('\n')}`),
+          : `Scoped check only — no new review. Verdict each of these minor defects as addressed true/false against the fix diff and return no new findings unless the fix broke something:\n${wave.map(describe).join('\n')}`, true),
         { agentType: AGENT.reviewer, schema: VERDICT, label: 'final-rereview', effort: 'low' })
       if (!recheck) {
         rulings.push({ stage: 'final', status: 'no_verdict' })
