@@ -125,6 +125,17 @@ mistake reaches another team: a store, a migration, an external contract, two or
 measured tasks A and C delivered the same acceptance and the same defect closures — the plugin's value on
 that fixture was the review, not the code, which is exactly what B buys.
 
+When a brief says one thing and the repository another — the code, a test, a CI assertion, an ADR, a doc,
+a comment, a consumer note — nobody picks a side: the implementer stops with the contradiction,
+`evidence-reconciler` weighs every source (executed > decided > descriptive > intent) and returns `brief`,
+`code` or `undecided` with an evidence table; `code` or `undecided` returns `status: 'contradiction'` and
+the user rules. Its recall comes from `bin/evidence-index.py` — BM25 over the repository's *records* (docs,
+ADRs, consumer notes, changelogs, CI files, and the XML docs and comments of `.cs`) through stdlib SQLite
+FTS5, no server, no model, nothing leaving the machine — because the source that settles a contradiction is
+usually worded differently from the ticket. Hits are leads the agent must open and read; see
+[docs/vector-store-evaluation.md](docs/vector-store-evaluation.md) for why this and not Chroma or Pinecone,
+and what would change that.
+
 A review finding that describes a reproducible failure is a `defect`, and a `defect` is never below
 `important` however soft the section it was written in; the verifier may raise a severity it can
 reproduce, and a minor defect rides along with the next fix round instead of being deferred for ever.

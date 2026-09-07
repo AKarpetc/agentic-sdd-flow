@@ -26,11 +26,22 @@ the sources that must change so the repository agrees with itself afterwards.
 
 ## 1. Enumerate the sources — all of them, before weighing any
 
-Search the working directory for everything that states or enforces the behaviour:
+🔴 **Start with the index, not with `grep`.** Run
+`evidence-index.py <repo> "<the claim in the brief's words, plus the behaviour in the code's words>" -n 10`
+(on PATH from the plugin's `bin/`; it builds or refreshes itself, BM25 over the repository's records —
+docs, ADRs, consumer notes, changelogs, CI files, and the XML docs and comments of `.cs`). It exists
+because the source that decides a contradiction is usually phrased *differently* from the ticket — a brief
+about "active orders" against an ADR about "cancelled rows stay in the ledger" shares no keyword, and a
+`grep` that misses that ADR produces a confident, wrong verdict. Query it **twice**: once in the brief's
+vocabulary and once in the code's.
+
+Its hits are **leads, not evidence**: open every file it returns and read the passage in place before you
+weigh it. Then continue with the table below — the index is a recall net, not a substitute for knowing
+where records live. Search the working directory for everything that states or enforces the behaviour:
 
 | Tier | Source | How to find it |
 |---|---|---|
-| **executed** — something fails when the behaviour changes | tests (`get_test_coverage_map`, Grep for the symbol in `tests/`), CI assertions (`.gitlab-ci.yml`, `.github/workflows`, smoke scripts under `scripts/`), consumer code that parses the output (`find_callers`, `find_references`), contract assemblies | Grep the symbol, the route, the literal value the claim names |
+| **executed** — something fails when the behaviour changes | tests (`get_test_coverage_map`, Grep for the symbol in `tests/`), CI assertions (`.gitlab-ci.yml`, `.github/workflows`, smoke scripts under `scripts/`), consumer code that parses the output (`find_callers`, `find_references`), contract assemblies | the index, then Grep the symbol, the route, the literal value the claim names |
 | **decided** — a recorded decision with an owner | ADRs (`docs/decisions`, `docs/architecture/decisions`), signed consumer contracts (`docs/consumers/*`), incident post-mortems, a changelog entry tied to an incident or a decision | Glob `**/decisions/**`, `**/consumers/**`, `CHANGELOG*`, Grep for the behaviour's keywords |
 | **descriptive** — prose that can drift silently | README, `docs/**`, XML docs, inline comments, commit messages (`git log -S'<literal>' --oneline`, `git log --follow <file>`) | Grep the docs roots; read the XML doc of the member |
 | **intent** — what somebody wants now | the brief, the ticket, the spec, the plan | the claim itself |
