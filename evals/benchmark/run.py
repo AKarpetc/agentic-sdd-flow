@@ -64,8 +64,10 @@ def session_env():
     return env
 
 
-def session_command(arm, max_turns):
-    """`claude -p` argv without the prompt: the prompt goes in on stdin.
+def session_command(arm, max_turns, model=None):
+    """`claude -p` argv without the prompt: the prompt goes in on stdin. `model` pins both arms to one model —
+    without it the session takes the user's default, and the 0.2.7 measurement ended up with T1–T3 on one model
+    and T4 on another.
 
     With the prompt in argv, every session's command line contains the fixture's project name, and a
     neighbouring session's `pkill -f "Orders.Api"` after a smoke test SIGTERMs this session too (exit 143,
@@ -73,13 +75,15 @@ def session_command(arm, max_turns):
     """
     command = ["claude", "-p", "--output-format", "stream-json", "--verbose", "--max-turns", str(max_turns),
                "--no-session-persistence", "--permission-mode", "acceptEdits", "--allowedTools", *TOOLS]
+    if model:
+        command += ["--model", model]
     if arm.get("settings"):
         command += ["--settings", json.dumps(arm["settings"])]
     return command
 
 
-def run_session(prompt, workspace, arm, stream_path, timeout, max_turns):
-    command = session_command(arm, max_turns)
+def run_session(prompt, workspace, arm, stream_path, timeout, max_turns, model=None):
+    command = session_command(arm, max_turns, model)
     env = session_env()
     started = time.time()
     timed_out = False
@@ -98,7 +102,7 @@ def run_session(prompt, workspace, arm, stream_path, timeout, max_turns):
             proc.wait(timeout=60)
         except Exception:
             proc.kill()
-    return {"wallSeconds": round(time.time() - started, 1), "timedOut": timed_out, "exit": proc.returncode}
+    return {"wallSeconds": round(time.time() - started, 1), "timedOut": timed_out, "exit": proc.returncode, "model": model or "default"}
 
 
 def workflow_args(inp):
@@ -193,11 +197,11 @@ def pulse_for(stream_path):
     return [{"type": v["type"], "seconds": round(v.get("last", 0) - v.get("started", 0), 1), "tools": v.get("tools", 0), "status": v.get("status")} for v in agents.values()]
 
 
-def run_pair(task, arm_name, arm, root, timeout, max_turns, port):
+def run_pair(task, arm_name, arm, root, timeout, max_turns, port, model=None):
     name = "%s-%s" % (task, arm_name)
     workspace = prepare_workspace(root, name)
     stream_path = os.path.join(root, name + ".stream.jsonl")
-    session = run_session(prompt_for(task, arm), workspace, arm, stream_path, timeout, max_turns)
+    session = run_session(prompt_for(task, arm), workspace, arm, stream_path, timeout, max_turns, model)
     metrics = parse_stream(stream_path)
     pulse = pulse_for(stream_path) if arm_name == "plugin" else None
     acceptance = subprocess.run([sys.executable, ACCEPTANCE, task, workspace, "--port", str(port)], capture_output=True, text=True, timeout=1800)
@@ -228,6 +232,7 @@ def main():
     parser.add_argument("--max-turns", type=int, default=120)
     parser.add_argument("--workers", type=int, default=2)
     parser.add_argument("--port-base", type=int, default=5200, help="first acceptance port; give each concurrent runner its own range")
+    parser.add_argument("--model", help="pin both arms to one model id (recorded in session.model); default: the CLI's default")
     args = parser.parse_args()
     arms = json.load(open(os.path.join(TASKS, "arms.json")))
     tasks = list(args.task or [])
@@ -238,7 +243,7 @@ def main():
     selected = [(t, a) for t in sorted(set(tasks), key=lambda t: list(MANIFEST).index(t) if t in MANIFEST else 99) for a in (args.arm or list(arms))]
     os.makedirs(args.out, exist_ok=True)
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = [pool.submit(run_pair, t, a, arms[a], args.out, args.timeout, args.max_turns, args.port_base + i) for i, (t, a) in enumerate(selected)]
+        futures = [pool.submit(run_pair, t, a, arms[a], args.out, args.timeout, args.max_turns, args.port_base + i, args.model) for i, (t, a) in enumerate(selected)]
         for future in concurrent.futures.as_completed(futures):
             try:
                 future.result()
