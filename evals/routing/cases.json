@@ -281,6 +281,26 @@
           "input": "agentic-sdd-flow:(dotnet-implementer|tests-writer)"
         }
       ]
+    },
+    {
+      "name": "deep-sizing-platform",
+      "fixture": "../benchmark/fixture-platform",
+      "prompt": "Implement ORD-60: sell in a second currency. Money must carry its currency from the price list through the order to the ledger — pricing gets a CAD price list, orders and statement lines store the currency, the ledger's existing rows have to keep working, and the checkout must become idempotent by requestId. Start from docs/architecture.md.",
+      "max_turns": 6,
+      "note": "the sizing gate must answer deep here: five services, a shared contract, a store migration on existing rows. The single-solution cases check the cheap end of the same gate.",
+      "expect_any": [
+        {
+          "tool": "Workflow",
+          "input": "architecture-design"
+        },
+        {
+          "tool": "Skill",
+          "input": "dotnet-feature"
+        }
+      ],
+      "text_regex": [
+        "deep"
+      ]
     }
   ]
 }

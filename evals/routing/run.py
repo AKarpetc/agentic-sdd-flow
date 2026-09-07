@@ -38,6 +38,10 @@ def prepare_workspace(fixture, root, name):
 
 
 def run_case(case, defaults, fixture, root, model, timeout):
+    """`fixture` is the suite default; a case may point at another repository (a multi-service one, say)
+    with its own `fixture` key, relative to this directory."""
+    if case.get("fixture"):
+        fixture = os.path.normpath(os.path.join(HERE, case["fixture"]))
     workspace = prepare_workspace(fixture, root, case["name"])
     allowed = list(defaults["allowed_tools"]) + list(case.get("allowed_tools_extra", []))
     command = ["claude", "-p", case["prompt"], "--output-format", "stream-json", "--verbose",

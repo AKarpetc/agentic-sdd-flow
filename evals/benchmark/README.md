@@ -6,7 +6,8 @@ real .NET solution, run twice — once with the plugin disabled and once with it
 same external checks.
 
 Since 0.2.8 the suite spans the whole size range — **simple, medium, complex, vague**, plus a **conflict**
-pair where the brief and the repository disagree (`tasks/tasks.json`)
+pair where the brief and the repository disagree, and one **deep** task on a five-service platform
+(`tasks/tasks.json`)
 — because the interesting question is no longer "is the plugin better" but **"does it charge in
 proportion to the work"**. A flow that delivers a one-file fix for $32 loses to one that delivers it for
 $8, however good its tests are.
@@ -71,21 +72,41 @@ filters cancelled orders. A T9 run that scores 4/4 on HTTP but rewrote ADR-0003 
 T10 is the recall test for `bin/evidence-index.py`: if the brief and the decisive record shared vocabulary,
 plain search would settle it and the index would be pointless.
 
+| T11 | ORD-60 | **deep** — multi-currency checkout across the whole platform: pricing gains a CAD price list and currency-scoped promotions, orders and statement lines carry their currency, the ledger gets a new migration over rows that already exist, and the checkout becomes idempotent by `requestId` | `InMemoryInventoryStore.ReleaseAsync` marks the reservation released but never returns its quantity to stock, so a failed checkout silently loses stock — and the fixture's own test passes because it asserts the reservation flag, not the shelf |
+
+T11 runs on the **second fixture**, `fixture-platform/` — five services (`Checkout.Api` gateway,
+`Orders.Api`, `Inventory.Api`, `Pricing.Api`, `Ledger.Api`), one shared `Platform.Contracts` assembly, an
+in-memory store in three of them and a SQLite store in the ledger whose schema comes from numbered SQL
+migrations applied at start-up. It exists because the sizing gate's three `deep` triggers — an external
+contract, a migration on rows that already exist, two or more projects — cannot honestly be answered
+`yes` on a one-solution fixture, so `deep` and `scope: 'compact'` had never run. The fixture ships
+`docs/architecture.md` and `ADR-0001` (amounts are USD), which the design pipeline has to supersede rather
+than edit; `quality_platform` in `acceptance.py` records which services the change reached, whether an
+applied migration was edited, whether the stock leak was fixed in the service that owns the stock or
+compensated for in the gateway, and whether any peer address was hard-coded.
+
+Which fixture a task runs on, which solution is built, which preamble it gets and how many services the
+acceptance client starts are all in `fixtures.json`; `--port-base` hands each concurrent cell a block of
+eight ports, and every service is told where its peers are through `Services__<Name>__BaseUrl`.
+
 The task classes and the tier each one *should* cost are in `tasks/tasks.json`; `report.py` prints the
 tier the plugin arm actually ran next to the expected one, so a mis-sized route is visible per task.
 
-The fixture also carries four convention violations in `ReportService` (primary constructor,
-`IOptions<T>`, `DateTime.Now`, an inline comment) that neither arm is asked to touch — the
-"Δ violations" metric counts only what a run adds.
+Each fixture carries convention violations that neither arm is asked to touch, in a file the task must
+open anyway — four in `ReportService` (primary constructor, `IOptions<T>`, `DateTime.Now`, an inline
+comment) and three in the platform's `LedgerStore` (`IOptions<T>` twice, an inline comment). The
+"Δ violations" metric subtracts the fixture's own count (`baselineBlocking` in `fixtures.json`), so it
+counts only what a run adds.
 
 ## What is measured (`acceptance.py`, `run.py`)
 
 Objective, identical for both arms:
 
 - **Outcome**: `dotnet build` green; the repository's own tests (passed/total from `dotnet test`); the
-  **hidden HTTP acceptance** — the API is started with `dotnet run` and hit by an external client on
-  exactly the routes, status codes and JSON shapes the brief specifies (4 checks for T1, 8 for T2, 8
-  for T3); whether the **planted bug** is fixed (the one acceptance check that cannot pass without it).
+  **hidden HTTP acceptance** — every service of the task's fixture is started with `dotnet run` (one for
+  T1–T10, five for T11, each told where its peers are) and hit by an external client on exactly the
+  routes, status codes and JSON shapes the brief specifies (4 checks for T1, 8 for T2, 8 for T3, 15 for
+  T11); whether the **planted bug** is fixed (the one acceptance check that cannot pass without it).
 - **Quality**: blocking convention violations in the final tree (the plugin's own gate, run as a
   scanner over every `.cs`) minus the four the fixture already has; commits and how many follow the
   `KEY: Description` form; uncommitted leftovers; files changed.
@@ -131,6 +152,9 @@ python3 evals/benchmark/run.py --task T6 --arm plugin --force-tier standard --ou
 
 # pin both arms to one model — without it each session takes the CLI's default of the day
 python3 evals/benchmark/run.py --class conflict --model claude-opus-5 --out results/bench-conflict
+
+# the deep task: five services, its own fixture, its own caps (3 h / 250 turns, from tasks.json)
+python3 evals/benchmark/run.py --task T11 --model claude-opus-5 --workers 1 --out results/bench-deep
 
 # the report
 python3 evals/benchmark/report.py results/bench-2026-09-06 > results/bench-2026-09-06/report.md
@@ -184,8 +208,12 @@ plans for hygiene rather than substance, sessions that hit `--max-turns` before 
 
 - Headless sessions cannot answer questions: a session that stops at a gate despite the preamble is
   a finding (both arms are told to self-approve), recorded as `STATUS` missing and a low acceptance score.
-- `deep` is not reachable on this fixture: it is one solution with no data store and no external contract,
-  so no task here can honestly demand the design pipeline. Measuring `deep` needs a multi-project fixture.
+- `deep` is not reachable on the single-solution fixture: no data store, no external contract, so no task
+  on it can honestly demand the design pipeline. That is what `fixture-platform/` and T11 are for — and T11
+  is the one cell whose caps come from the manifest (3 h, 250 turns) instead of the runner's defaults,
+  because a design pipeline plus five services does not fit in 90 minutes.
+- T11 keeps five `dotnet run` processes alive during its acceptance; give it `--workers 1` unless the
+  machine can carry ten services and two builds at once.
 - One run per (task, arm) is a sample, not a distribution. Two or three repetitions, or all three tasks,
   before drawing a conclusion; report.py aggregates whatever directories it is given.
 - Both arms share the same model, the same machine and the same user-scope MCP servers; the only

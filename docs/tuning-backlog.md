@@ -16,6 +16,12 @@ python3 evals/benchmark/run.py --task T6 --arm plugin --force-tier standard --ou
 
 # the paraphrase conflict: does BM25 recall reach the decisive ADR when it shares no vocabulary with the brief
 python3 evals/benchmark/run.py --task T10 --out results/bench-<date>-paraphrase --workers 1 --model claude-opus-5
+
+# deep, for the first time: five services, a shared contract, a migration over existing rows
+python3 evals/benchmark/run.py --task T11 --out results/bench-<date>-deep --workers 1 --model claude-opus-5
+
+# and the cheap version of the same question first — does the gate even say `deep`? (~$1, minutes)
+python3 evals/routing/run.py --case deep-sizing-platform --model claude-opus-5
 ```
 
 ## 1. Repetition, before anything else (P0)
@@ -79,15 +85,31 @@ is sufficient and the vector question is closed for now. If it rules `brief`, tr
 
 **Decides it.** T10's acceptance and `adrTouched` / `ciSmokeExpects` quality signals.
 
-## 5. `deep` has never run (P2)
+## 5. `deep` has never run — the fixture now exists (P1, was P2)
 
-**Evidence.** No cell exercised the design pipeline: the fixture is one solution, no data store, no
-external contract, so nothing in it can honestly demand it. `scope: 'compact'` is therefore untested too.
+**Evidence.** No cell exercised the design pipeline: the single-solution fixture has no data store and no
+external contract, so nothing in it can honestly demand one. `scope: 'compact'` is therefore untested too.
 
-**Change.** A second fixture: two projects (`Orders.Api` + a `Orders.Contracts` class library consumed by a
-second service), a Postgres-backed store with an EF migration, and a task that moves a behaviour across the
-boundary. That is a day of work and doubles the suite's runtime — do it only when a real `deep` change is
-about to be run for real.
+**Change (built, unmeasured).** `evals/benchmark/fixture-platform/` — five services (`Checkout.Api`
+gateway, `Orders.Api`, `Inventory.Api`, `Pricing.Api`, `Ledger.Api`), a shared `Platform.Contracts`
+assembly, and a SQLite ledger whose schema comes from numbered migrations applied at start-up over rows
+that already exist. **T11 / ORD-60** (multi-currency checkout) answers `yes` to all three of the gate's
+`deep` triggers at once — an external contract, a migration on existing rows, more than two projects —
+and trips over a cross-service defect: releasing a reservation never returns its quantity to stock, and
+the fixture's own test passes because it asserts the reservation flag rather than the shelf. Fifteen
+hidden HTTP checks; the caps for that cell (3 h, 250 turns) come from the manifest, because the design
+pipeline plus five services does not fit in 90 minutes.
+
+**Decides it.** In order of price:
+1. `evals/routing/run.py --case deep-sizing-platform` — does the gate say `deep` at all (~$1);
+2. `run.py --task T11` both arms — acceptance, the `route` column against `expectedTier: deep`, and the
+   `Reach:` line `report.py` prints: services touched, applied migrations edited (must be none), whether
+   the stock leak was fixed in `Inventory.Api` or compensated for in the gateway, hard-coded peer URLs,
+   whether ADR-0001 was superseded or overwritten;
+3. only then `--repeat`, and only if the first run is not decisive on its own.
+
+Expect the plugin arm to cost several times the T6 `standard` run and the baseline to be the interesting
+half: a five-service change with no design record is exactly where the two flows should diverge.
 
 ## 6. Smaller, cheap, evidence-backed (P2)
 

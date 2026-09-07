@@ -1,0 +1,26 @@
+{
+  "orders": {
+    "path": "fixture",
+    "solution": "Orders.slnx",
+    "preamble": "_preamble.md",
+    "baselineBlocking": 4,
+    "services": [
+      {"name": "Orders", "project": "src/Orders.Api", "offset": 0}
+    ],
+    "entry": "Orders"
+  },
+  "platform": {
+    "path": "fixture-platform",
+    "solution": "Platform.slnx",
+    "preamble": "_preamble.platform.md",
+    "baselineBlocking": 3,
+    "services": [
+      {"name": "Checkout", "project": "src/Checkout.Api", "offset": 0},
+      {"name": "Orders", "project": "src/Orders.Api", "offset": 1},
+      {"name": "Inventory", "project": "src/Inventory.Api", "offset": 2},
+      {"name": "Pricing", "project": "src/Pricing.Api", "offset": 3},
+      {"name": "Ledger", "project": "src/Ledger.Api", "offset": 4}
+    ],
+    "entry": "Checkout"
+  }
+}

@@ -3,7 +3,8 @@
 
   python3 evals/benchmark/run.py --task T1 [--task T2 ...] [--arm baseline --arm plugin] --out DIR [--timeout 5400]
 
-Every (task, arm) runs a headless `claude -p` session in a fresh copy of evals/benchmark/fixture, streams the
+Every (task, arm) runs a headless `claude -p` session in a fresh copy of the task's fixture (fixtures.json:
+one solution for T1-T10, the five-service platform for T11), streams the
 session to <out>/<task>-<arm>.stream.jsonl with an arrival timestamp per event, then runs acceptance.py on
 the workspace and writes <out>/<task>-<arm>.json with session metrics, a per-agent timeline and the checks.
 """
@@ -19,12 +20,18 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-FIXTURE = os.path.join(HERE, "fixture")
 TASKS = os.path.join(HERE, "tasks")
 ACCEPTANCE = os.path.join(HERE, "acceptance.py")
 MANIFEST = json.load(open(os.path.join(TASKS, "tasks.json"), encoding="utf-8"))
+FIXTURES = json.load(open(os.path.join(HERE, "fixtures.json"), encoding="utf-8"))
+PORT_STRIDE = 8  # one block of ports per concurrent cell: the platform fixture needs one per service
 KEYS = {task: meta["key"] for task, meta in MANIFEST.items()}
 TOOLS = ["Bash", "Read", "Write", "Edit", "MultiEdit", "Glob", "Grep", "Agent", "Skill", "Workflow", "TodoWrite", "TaskOutput", "Monitor"]
+
+
+def fixture_for(task):
+    """The repository a task runs on, with its solution, its preamble and its services (fixtures.json)."""
+    return FIXTURES[MANIFEST.get(task, {}).get("fixture", "orders")]
 
 
 def read(path):
@@ -35,19 +42,20 @@ def read(path):
 def prompt_for(task, arm):
     title = read(os.path.join(TASKS, task + ".md")).splitlines()[0].lstrip("# ").split("—", 1)[-1].strip()
     return "\n\n".join([
-        read(os.path.join(TASKS, "_preamble.md")).strip(),
+        read(os.path.join(TASKS, fixture_for(task)["preamble"])).strip(),
         "Process for this run: " + arm["instruction"].replace("<TASK-KEY>", KEYS[task]).replace("<title>", title),
         read(os.path.join(TASKS, task + ".md")).strip(),
     ])
 
 
-def prepare_workspace(root, name, overlay=None):
-    """A fresh copy of the fixture; a task overlay (tasks/<name>.overlay/) is copied on top of it, so a task
-    can ship its own docs, CI file or a variant of a source file without touching the shared fixture."""
+def prepare_workspace(root, name, task, overlay=None):
+    """A fresh copy of the task's fixture; a task overlay (tasks/<name>.overlay/) is copied on top of it, so a
+    task can ship its own docs, CI file or a variant of a source file without touching the shared fixture."""
     workspace = os.path.join(root, name)
     if os.path.exists(workspace):
         shutil.rmtree(workspace)  # a re-run into the same --out starts clean; a half-finished workspace is not a baseline
-    shutil.copytree(FIXTURE, workspace, ignore=shutil.ignore_patterns("bin", "obj"))
+    source = os.path.join(HERE, fixture_for(task)["path"])
+    shutil.copytree(source, workspace, ignore=shutil.ignore_patterns("bin", "obj", ".run"))
     if overlay:
         shutil.copytree(os.path.join(TASKS, overlay), workspace, dirs_exist_ok=True)
     git = ["git", "-C", workspace, "-c", "user.name=bench", "-c", "user.email=bench@example.com"]
@@ -230,7 +238,9 @@ def run_pair(task, arm_name, arm, root, timeout, max_turns, port, model=None, re
     """One (task, arm) session. `repeat` is the 1-based repetition index: one run per cell is a sample, not a
     distribution, and routing is a model's judgement whose stability only repetition can show."""
     name = "%s-%s" % (task, arm_name) + ("" if repeat <= 1 else "-r%d" % repeat)
-    workspace = prepare_workspace(root, name, MANIFEST.get(task, {}).get("overlay"))
+    timeout = timeout or MANIFEST.get(task, {}).get("timeout", 5400)
+    max_turns = max_turns or MANIFEST.get(task, {}).get("maxTurns", 120)
+    workspace = prepare_workspace(root, name, task, MANIFEST.get(task, {}).get("overlay"))
     stream_path = os.path.join(root, name + ".stream.jsonl")
     prompt = prompt_for(task, arm)
     if force_tier and arm_name == "plugin":
@@ -265,10 +275,11 @@ def main():
                         help="run every task of this class (simple/medium/complex/vague); repeatable")
     parser.add_argument("--arm", action="append")
     parser.add_argument("--out", required=True)
-    parser.add_argument("--timeout", type=int, default=5400)
-    parser.add_argument("--max-turns", type=int, default=120)
+    parser.add_argument("--timeout", type=int, default=None, help="wall-clock cap per session; default: the task's own, else 5400 s")
+    parser.add_argument("--max-turns", type=int, default=None, help="default: the task's own, else 120")
     parser.add_argument("--workers", type=int, default=2)
-    parser.add_argument("--port-base", type=int, default=5200, help="first acceptance port; give each concurrent runner its own range")
+    parser.add_argument("--port-base", type=int, default=5200,
+                        help="first acceptance port; each cell gets a block of %d (one per service)" % PORT_STRIDE)
     parser.add_argument("--model", help="pin both arms to one model id (recorded in session.model); default: the CLI's default")
     parser.add_argument("--repeat", type=int, default=1, help="run each (task, arm) N times; outcomes are suffixed -r2, -r3 …")
     parser.add_argument("--force-tier", choices=("quick", "mix", "light", "standard", "deep"),
@@ -286,7 +297,7 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = [pool.submit(run_pair, t, a, arms[a], args.out, args.timeout, args.max_turns,
-                               args.port_base + i, args.model, r, args.force_tier)
+                               args.port_base + i * PORT_STRIDE, args.model, r, args.force_tier)
                    for i, (t, a, r) in enumerate(selected)]
         for future in concurrent.futures.as_completed(futures):
             try:

@@ -10,7 +10,8 @@ import os
 import sys
 from collections import defaultdict
 
-FIXTURE_BLOCKING = 4  # convention violations already present in the untouched fixture (ReportService)
+FIXTURE_BLOCKING = 4  # fallback for outcomes written before acceptance.py recorded the fixture's own count
+FIXTURES = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures.json"), encoding="utf-8"))
 MANIFEST = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "tasks", "tasks.json"), encoding="utf-8"))
 
 
@@ -66,6 +67,15 @@ def route_cell(r):
     return route if route == expected or not expected else "%s (expected %s)" % (route, expected)
 
 
+def baseline_blocking(r):
+    """The violations the task's own fixture already carries — the Δ counts only what a run added."""
+    conv = (r.get("acceptance") or {}).get("conventions") or {}
+    if isinstance(conv.get("baselineBlocking"), int):
+        return conv["baselineBlocking"]
+    fixture = (r.get("taskMeta") or MANIFEST.get(r["task"], {})).get("fixture", "orders")
+    return FIXTURES.get(fixture, {}).get("baselineBlocking", FIXTURE_BLOCKING)
+
+
 def outcome_row(r):
     m, a = r["metrics"], r.get("acceptance", {})
     acc = a.get("acceptance", {})
@@ -87,7 +97,7 @@ def outcome_row(r):
         "%s/%s" % (acc.get("passed", "–"), acc.get("total", "–")),
         "✅" if a.get("plantedBugFixed") else "❌",
         "%s%s" % (quality.get("testCases", "–"), "" if quality.get("reachesTheEndpoint") is None else (" ✅http" if quality.get("reachesTheEndpoint") else " ❌http")),
-        "%+d" % (conv.get("blocking", FIXTURE_BLOCKING) - FIXTURE_BLOCKING) if conv else "–",
+        "%+d" % (conv.get("blocking", 0) - baseline_blocking(r)) if conv else "–",
         "%s (%s ok)" % (git.get("commits", "–"), git.get("wellFormed", "–")),
     ]
 
@@ -138,6 +148,20 @@ def main():
                 out += ["Conflict (truth = %s): noticed in the final message %s · records touched: %s · doc rewritten the wrong way %s · ADR touched %s · CI smoke now expects %s · code filters cancelled %s" % (
                     conflict.get("truth"), "✅" if conflict.get("noticedInFinalMessage") else "❌", ", ".join(q.get("recordsTouched") or []) or "none",
                     "❌ yes" if wrong_way else "✅ no", "yes" if q.get("adrTouched") else "no", q.get("ciSmokeExpects"), q.get("reportServiceFiltersCancelled")), ""]
+            quality = r.get("acceptance", {}).get("quality", {})
+            if quality.get("servicesTouched") is not None:
+                out += ["Reach: services touched %s · contracts %s · migrations added %s · applied migrations edited %s · "
+                        "inventory stock writes %s · checkout calls the stock endpoint %s · hard-coded peer urls %s · "
+                        "ADR-0001 edited %s · decisions added %s" % (
+                            ", ".join(quality.get("servicesTouched") or []) or "none",
+                            len(quality.get("contractsTouched") or []),
+                            ", ".join(quality.get("migrationsAdded") or []) or "none",
+                            "❌ " + ", ".join(quality["appliedMigrationsEdited"]) if quality.get("appliedMigrationsEdited") else "✅ no",
+                            quality.get("inventoryStockWrites"),
+                            "❌ yes" if quality.get("checkoutTouchesStockEndpoint") else "✅ no",
+                            "❌ " + str(quality["hardcodedPeerUrls"]) if quality.get("hardcodedPeerUrls") else "✅ none",
+                            "❌ yes" if quality.get("adr0001Edited") else "✅ no",
+                            ", ".join(quality.get("decisionsAdded") or []) or "none"), ""]
             failed = [c for c in r.get("acceptance", {}).get("acceptance", {}).get("checks", []) if not c["ok"]]
             if failed:
                 out += ["Failed acceptance checks:", ""] + ["- %s — %s" % (c["name"], c["detail"][:140]) for c in failed] + [""]
@@ -161,7 +185,7 @@ def main():
                 class_rows.append([klass, arm, cell["n"], money(cell["cost"] / cell["n"] if cell["n"] else 0),
                                    "%d/%d" % (cell["acc"], cell["acc_total"])])
         out += ["## By task class", "", table(["class", "arm", "runs", "Σ model cost per run", "acceptance"], class_rows), ""]
-    out += ["Δ violations = blocking convention violations in the final tree minus the %d the fixture already carries. Acceptance = hidden HTTP checks against `dotnet run`. Stage minutes are arrival times of top-level Skill/Agent/Workflow dispatches; agent times come from the plugin's pulse (plugin arm) or nested tool events (baseline). cost = the CLI's `total_cost_usd`; Σ model cost = the sum of `modelUsage[*].costUSD`, which also counts agents that ran inside a Workflow. route = the tier the plugin arm actually ran, read off its own Workflow dispatches (quick = no workflow, light/standard = dotnet-sdd `mode`, deep = architecture-design ran). tests written = `[Fact]`/`[Theory]` count in the final tree, with ✅http when at least one test file drives the API through `WebApplicationFactory`/`CreateClient`." % FIXTURE_BLOCKING]
+    out += ["Δ violations = blocking convention violations in the final tree minus the count its own fixture already carries (4 for the single-solution fixture, %d for the platform). Acceptance = hidden HTTP checks against `dotnet run`. Stage minutes are arrival times of top-level Skill/Agent/Workflow dispatches; agent times come from the plugin's pulse (plugin arm) or nested tool events (baseline). cost = the CLI's `total_cost_usd`; Σ model cost = the sum of `modelUsage[*].costUSD`, which also counts agents that ran inside a Workflow. route = the tier the plugin arm actually ran, read off its own Workflow dispatches (quick = no workflow, light/standard = dotnet-sdd `mode`, deep = architecture-design ran). tests written = `[Fact]`/`[Theory]` count in the final tree, with ✅http when at least one test file drives the API through `WebApplicationFactory`/`CreateClient`." % FIXTURES.get("platform", {}).get("baselineBlocking", 0)]
     print("\n".join(out))
 
 
