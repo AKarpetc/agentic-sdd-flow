@@ -29,8 +29,23 @@ difference between them *is* the measurement.
 | T9 | conflict (truth = code) | superpowers | – | 6.9 min | $4.01 | **1/4** | ❌ | 9 | ✅ | −3 | 0 |
 | T9 | conflict (truth = code) | **plugin** | `mix` | 18.1 min | $8.53 | **4/4** | ✅ | 13 | ✅ | −4 | 5 |
 
-Pending at the time of writing: the T7 pair. Three cells were voided by an account session limit at 15:00Z
-and re-run afterwards; `results/void-session-limit/` keeps the killed sessions as evidence.
+| T7 | vague | superpowers | – | 5.1 min | $3.01 | 6/6 | ✅ | 24 | ✅ | +0 | 0 |
+| T7 | vague | plugin | `mix` | 15.8 min | $9.22 | 6/6 | ✅ | 18 | ✅ | +0 | 4 |
+
+Complete: 14 cells, 7 tasks × 2 arms. Three cells were voided by an account session limit at 15:00Z and
+re-run afterwards; `results/void-session-limit/` keeps the killed sessions as evidence.
+
+### The comparison, as it stands after the routing fix
+
+| | bare superpowers | plugin 0.2.8 |
+|---|---|---|
+| acceptance | **38/41** | **41/41** |
+| cost, six comparable tasks (T4 excluded: the plugin session was killed at the cap and never reported a cost) | **$19.63** | **$43.60** |
+| wall, the same six | 27.1 min | 77.6 min |
+| the three missed checks | all in T9 | – |
+
+**2.2× the money and 2.9× the wall clock, for three acceptance checks — all three of them in the one task
+where the cheaper flow silently broke a downstream consumer.** That is the whole trade, in one line.
 
 ## 2. What the routing fix bought
 
@@ -110,6 +125,21 @@ reviewers' lines), but the routes the gate now picks (`quick`, `mix`) run no Ana
 not even produced. That is the honest result: *the sharing machinery matters only for the plan-driven
 routes, which are now the exception.*
 
+## 5b. The vague class is two different things
+
+T4 and T7 are both "loose briefs", and they cost an order of magnitude apart:
+
+| | T4 | T7 |
+|---|---|---|
+| what is left open | the *mechanisms*: extensible promotion kinds, a controllable clock, configuration-driven rules | the *rule*: what "needs attention" means is the reader's judgement |
+| baseline | $21.22 / 52 min | $3.01 / 5.1 min |
+| plugin | 90 min, killed at the cap | $9.22 / 15.8 min |
+
+So it is not vagueness that is expensive — it is **how many mechanisms have to be invented**. A brief that
+leaves a business rule open is cheap; a brief that leaves the architecture open is not. The sizing rubric
+already encodes this in question 5, and the T4 route (`standard`) was the correct one for it; what it
+could not do is finish inside a 90-minute cap.
+
 ## 6. Verdict
 
 **Use the plugin as a gate, not as a factory.** After 0.2.8 the numbers say:
@@ -123,5 +153,25 @@ routes, which are now the exception.*
 - **always** the reconciler when the brief and the repository disagree, whatever the route — that is the
   one measured case where the cheaper flow did real damage.
 
-What still needs measuring: the T9 plugin arm (does it stop, or repeat the baseline's mistake), the T7
-pair, and a repetition of every cell — one run per cell is a sample, not a distribution.
+### In one paragraph
+
+Before 0.2.8 the plugin cost 3.7–7.3× bare superpowers and bought marginally better tests. After the
+routing fix it costs **the same on small work, 2–3× on everything else, and 41/41 against 38/41** — and the
+three checks it does not miss are the ones that matter most: the case where the ticket is wrong and the
+repository is right. On the code itself the two flows are indistinguishable; every acceptance check the
+plugin passed, bare superpowers passed too, except in the conflict case. Buy the plugin for the gate — the
+review that finds a race and a guard bypass, the reconciler that refuses to overrule an ADR, the write hook
+that costs nothing — and let superpowers write the code.
+
+### What still needs measuring
+
+- **Repetition.** One run per cell is a sample, not a distribution; routing is a model's judgement, and its
+  *stability* is untested.
+- **`deep`.** Untouched: the fixture is one solution with no store and no external contract, so nothing in
+  it can honestly demand the design pipeline.
+- **The context-sharing machinery.** Built and enforced (pack, gate, journal, dependency inheritance) but
+  barely exercised, because the routes the gate now picks run no Analyze phase. It needs a task that
+  legitimately takes `light`/`standard` — or the honest conclusion that the machinery is for a route the
+  gate has learned to avoid.
+- **The paraphrase conflict**, to decide whether the FTS5 evidence index is enough or embeddings are
+  warranted ([vector-store-evaluation.md](vector-store-evaluation.md) §4).
