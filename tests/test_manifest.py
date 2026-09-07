@@ -366,7 +366,7 @@ class Tiers(unittest.TestCase):
 
     def test_shas_ride_on_the_reports_instead_of_their_own_agents(self):
         text = self.sdd()
-        self.assertLessEqual(text.count("await sha("), 2, "a git rev-parse per task per round was 35 % of the workflow's tokens")
+        self.assertLessEqual(text.count("await sha("), 3, "a git rev-parse per task per round was 35 % of the workflow's tokens; the survivors are fallbacks only")
         self.assertIn("report.headSha", text)
         self.assertIn("tests.headSha", text)
         self.assertIn("baseSha: { type: 'string' }", text, "the analyze agent already runs Bash: it returns the base SHA")
@@ -399,6 +399,24 @@ class Tiers(unittest.TestCase):
         tests_writer = read(os.path.join(ROOT, "agents", "tests-writer.md"))
         self.assertIn("git rev-parse HEAD", tests_writer)
         self.assertIn("Cut the padding", tests_writer)
+
+    def test_review_mode_gates_a_branch_written_elsewhere(self):
+        text = self.sdd()
+        self.assertIn("const reviewOnly = String(mode).toLowerCase() === 'review'", text)
+        self.assertIn("if (!skipPlanReview && !reviewOnly)", text, "review mode has no plan to review")
+        self.assertIn("finalVerdict && reviewOnly", text, "the only review of the run must go through the verifier")
+        feature = self.feature()
+        self.assertIn("mode: 'review'", feature, "the mix route reaches the workflow as review mode")
+        self.assertIn("`mix`", feature)
+
+    def test_the_gate_proposes_routes_with_measured_costs(self):
+        feature = self.feature()
+        sizing = read(os.path.join(ROOT, "skills", "dotnet-feature", "references", "sizing.md"))
+        for route in ("superpowers", "mix", "agentic"):
+            self.assertIn(route, feature.lower())
+        self.assertIn("Recommend", feature)
+        self.assertIn("measured", sizing.lower())
+        self.assertIn("$2.23", sizing, "the estimates shown to the user must be the measured ones")
 
     def test_a_contradiction_is_reconciled_not_guessed(self):
         text = self.sdd()

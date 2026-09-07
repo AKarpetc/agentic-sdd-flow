@@ -28,31 +28,45 @@ picked in one line before you start work.
 - **Forced tier** (optional): `--tier quick|light|standard|deep` anywhere in the arguments, or the user
   saying "just do it" / "full review please". An explicit tier always wins over the gate.
 
-## 2. Size the change — the tier gate
+## 2. Size the change, then **propose the route** — do not just pick one
 
 Answer the five questions in [references/sizing.md](references/sizing.md) from the brief plus a **budgeted**
 look at the repository (at most: one `roslyn-query.py <project> get_endpoint_map` or one Grep for the symbol
-the brief names). Do not explore further to decide — the gate is meant to be cheaper than the work.
+the brief names). Do not explore further to decide — the gate must be cheaper than the work.
 
-| Tier | The change looks like | Route |
+Then **present three routes with what each costs, recommend one, and say why** — in this shape, at most
+ten lines, before any work starts:
+
+```
+Sizing: 3 files, one internal endpoint, no store, no contract, behaviour specified.
+  A. superpowers      brainstorming → TDD in this session, no plugin agent   ≈ $2–4,  4–8 min   ← recommended
+  B. mix              A, then the plugin's verified review gate on the branch ≈ $6–10, 12–20 min
+  C. agentic (light)  plan → dotnet-sdd, implement/tests per task + review    ≈ $9–14, 20–25 min
+Recommended A: the rules gate runs either way through the hooks, and on this size the measured
+difference between A and C was cost only — same files, same tests. Say B or C to override.
+```
+
+**Recommend by the table below** — it is what the measurements support, not a preference:
+
+| The change | Recommend | Why |
 |---|---|---|
-| `quick` | one or two files, no new endpoint / contract / migration / package, behaviour already specified (a bug fix, a rename, a guard, a threshold) | **step 3q** — inline, no plan, no workflow |
-| `light` | one project, roughly ≤ 5 files, one endpoint or one service behaviour, no data store, no external contract | **step 3l** — plan + `dotnet-sdd` in `mode: 'light'` |
-| `standard` | a feature inside one service: several tasks, new types, tests across layers | **step 3s** — brainstorm + plan + plan review + `dotnet-sdd` |
-| `deep` | two or more projects, a data store / migration on existing rows, an external contract (gRPC, public endpoint, published event), new infrastructure, or the user asks for a design | **step 3d** — `architecture-design`, then `standard` |
+| one or two files, behaviour specified | **A `superpowers`** | measured parity with the plugin on the simple task at a third of the cost |
+| inside one service: several files, new types, state, an internal endpoint | **B `mix`** | the flow that writes code fastest, plus the one thing it has no equivalent for — a verified review with the defect floor |
+| a data store, a migration on existing rows, an external contract (gRPC, public endpoint, published event), two or more projects, new infrastructure | **C `agentic`** (`standard`, or `deep` when the design itself is open) | a plan, a per-task gate and a design record are worth their price only where a mistake reaches another team |
+| the brief contradicts the repository (a doc, an ADR, a test, CI, a consumer note) | any route **plus** `evidence-reconciler` first | never let a route decide a contradiction |
 
-**One tier up, never two.** When two tiers fit, take the cheaper one and let the escalation rules move it up:
+Rules for the proposal:
 
-- `quick` → `light` when the fix needs a third production file you did not expect, or brainstorming
-  concludes the change is not bounded. An **empty or missing test project is not a reason**: `quick` writes
-  its own tests and a `*.Tests` project with the packages already referenced is not plumbing.
-- `light` → `standard` when the implementer reports `done_with_concerns` about scope, the Debug phase ran,
-  or the final review returns a `critical` finding.
-- `standard` → `deep` **only with the user's word.** If a task turns out to change a contract or a store,
-  stop, say so, and ask.
-
-Announce the outcome in one line: `Tier: light — one endpoint in shop-api, no store or contract change.`
-De-escalation mid-run is not allowed: once the design pipeline has run, its spec is executed.
+- **The user's answer wins**, including "just do it" (→ A) and `--tier quick|light|standard|deep` (→ that route).
+- **Non-interactive or headless run** (no human to answer, a benchmark, a `-p` session): take the
+  recommendation, state it in one line, continue. Never block on the menu.
+- **Estimates come from [sizing.md](references/sizing.md)**, which carries the measured numbers. Do not invent
+  a figure; if a route has no measurement for this size, say `unmeasured`.
+- **One route up, never two**, and only on evidence found during the run:
+  - A → B when the change turns out to touch a third production file or a behaviour another service reads;
+  - B → C when a task needs a migration, a contract change, or the review finds a `critical`;
+  - C → `deep` **only with the user's word**.
+- De-escalation mid-run is not allowed: once the design pipeline has run, its spec is executed.
 
 🔴 **When the brief contradicts the repository, nobody picks a side.** If the budgeted look (or
 brainstorming, or the implementer) finds that a criterion in the brief states a behaviour that the code,
@@ -64,6 +78,16 @@ at the root and correct the stale comment/doc. `code` or `undecided` → the bri
 split: show the evidence table to the user and **stop until they rule** — never "fix" an ADR, a CI
 assertion or a consumer contract to match a ticket. Inside `dotnet-sdd` this happens on its own
 (Reconcile phase; the workflow returns `status: 'contradiction'` for you to act on).
+
+## Route map
+
+| Route | Section | What runs |
+|---|---|---|
+| A `superpowers` (= `quick`) | 3q | the superpowers flow in this session, no plugin agent |
+| B `mix` | 3m | 3q, then `dotnet-sdd` in `mode: 'review'` on the branch |
+| C `agentic` — `light` | 3l | short plan → `dotnet-sdd` `mode: 'light'` |
+| C `agentic` — `standard` | 3s | brainstorm → plan → one plan review → `dotnet-sdd` |
+| C `agentic` — `deep` | 3d | `architecture-design` first, then `standard` |
 
 ## 3q. `quick` — the superpowers flow, no plugin agents
 
@@ -83,6 +107,24 @@ Measured on the benchmark's simple task (T5, Opus 5): this flow delivers 5/5 wit
 ≈ 4 minutes for ≈ $2; the same change through `light` cost $7 and 16 minutes for the same tree. If a
 fourth production file opens, or brainstorming itself concludes the change is not bounded, escalate to
 `light` and say so.
+
+## 3m. `mix` — superpowers writes it, the plugin gates it
+
+The fastest writer and the gate the writer does not have. Nothing else.
+
+1. Record the branch point first: `git -C <projectDir> rev-parse HEAD` → `base`.
+2. Do the work exactly as in **3q** (brainstorming → `superpowers:test-driven-development`), committing as
+   you go. No implementer, no `tests-writer`, no plan.
+3. Gate it:
+   `Workflow({ name: 'agentic-sdd-flow:dotnet-sdd', args: { project, projectDir, taskKey, mode: 'review', base } })`.
+   Review mode has no plan and no tasks: it reviews the whole branch once at full effort, sends every
+   critical/important finding and every `defect` through `findings-verifier`, runs one fix wave and a
+   scoped re-review, and returns the same result shape as any other run.
+4. Continue at step 5.
+
+Use it when the change lives in one service but somebody else's code depends on its behaviour — the
+review, the defect floor and the verifier are what you are paying for, and they cost one agent pass over
+a finished branch instead of three per plan task.
 
 ## 3l. `light` — plan, then the light workflow
 

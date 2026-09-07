@@ -108,26 +108,22 @@ and restart. `claude plugin uninstall` + `install` is the fallback when the cach
 ```
 Design (approval gate) → plan → `dotnet-sdd` workflow → branch, never pushed.
 
-### The change is sized before it runs
+### The change is sized, and the route is proposed with its price
 
-The entry skill picks one of four routes from the brief (blast radius, surface, data, reach,
-how much of the *what* is already decided — [the rubric](skills/dotnet-feature/references/sizing.md)),
-announces it in one line, and escalates on evidence — one tier up, never two. Force one with
-`--tier quick|light|standard|deep`.
+The entry skill answers five questions from the brief ([the rubric](skills/dotnet-feature/references/sizing.md)),
+then **proposes three routes with what each costs and recommends one** — it does not silently pick. A
+headless run takes the recommendation and says so; `--tier` or one word from the user overrides it.
 
-| Tier | When | What runs | Ballpark |
-|---|---|---|---|
-| `quick` | one or two files, nothing new on the surface | the superpowers flow itself (brainstorming → test-driven-development) in the session — **no plugin agent**; the rules still hold through the hooks | ≈ $2–4 |
-| `light` | one project, ≤ 5 files, one endpoint | short plan → `dotnet-sdd` `mode: 'light'`: implement + tests per task, **one** whole-branch review with one fix wave | ≈ $8–14 |
-| `standard` | a feature inside one service | brainstorm → plan → one plan review → `dotnet-sdd`: per-task review, verified findings, bounded fix loop, final review | ≈ $18–25 |
-| `deep` | two or more projects, a store or migration, an external contract, new infrastructure | `architecture-design` first (`scope: 'compact'` unless it really spans services), then `standard` | + $15–40 |
+| Route | What runs | Measured (Opus 5, benchmark fixture) |
+|---|---|---|
+| **A `superpowers`** | brainstorming → test-driven-development in the session, **no plugin agent**; the rules still hold through the hooks | $2.23 / 3.8 min on the simple task, $4.30 / 7.4 min on the complex one |
+| **B `mix`** | A, then `dotnet-sdd` in `mode: 'review'`: one whole-branch review, every finding through the verifier, one fix wave | + $4–7 |
+| **C `agentic`** | `light` (plan → implement/tests per task + one branch review), `standard` (+ per-task review, verified fix loop), `deep` (`architecture-design` first) | $9.32 / 22 min (`light`), $31.51 / 73 min (`standard`) |
 
-When a brief says one thing and the repository another — the code, a test, a CI assertion, an ADR, a
-doc, a comment, a consumer note — nobody picks a side: the implementer stops with the contradiction,
-`evidence-reconciler` weighs every source (executed > decided > descriptive > intent, independence and
-recency break ties) and returns `brief`, `code` or `undecided` with an evidence table. `brief` fixes the
-code at the root; `code` or `undecided` returns `status: 'contradiction'` and the user rules (`args.truth`).
-`docs-sync` and `plan-reviewer` treat a record that disagrees with a diff as *contested*, never as stale.
+Recommend A for one or two files, B for a change inside one service that another service reads, C where a
+mistake reaches another team: a store, a migration, an external contract, two or more projects. On the
+measured tasks A and C delivered the same acceptance and the same defect closures — the plugin's value on
+that fixture was the review, not the code, which is exactly what B buys.
 
 A review finding that describes a reproducible failure is a `defect`, and a `defect` is never below
 `important` however soft the section it was written in; the verifier may raise a severity it can

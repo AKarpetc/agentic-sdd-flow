@@ -1,7 +1,7 @@
 export const meta = {
   name: 'dotnet-sdd',
   description: 'Execute an implementation plan in a .NET repository: implement, test, review, verify findings, bounded fix loop, final review',
-  whenToUse: 'After brainstorming + writing-plans produced a plan file for a .NET project. Usually launched by the dotnet-feature skill. Pass mode: "light" for a small single-project change, "standard" (default) for a feature.',
+  whenToUse: 'After brainstorming + writing-plans produced a plan file for a .NET project. Usually launched by the dotnet-feature skill. mode: "review" gates a branch somebody else already wrote (no plan, no tasks), "light" a small single-project change, "standard" (default) a feature.',
   phases: [
     { title: 'Analyze', detail: 'split the plan into task briefs' },
     { title: 'Plan review', detail: 'plan-reviewer gates the plan against the spec and the conventions' },
@@ -156,11 +156,14 @@ const reconciled = []
 // light: one small single-project change — no plan review, no per-task review loop, one whole-branch
 // review at the end. standard: the full per-task gate. The dotnet-feature skill sizes the change and picks.
 const light = String(mode).toLowerCase() === 'light'
+// review: the code already exists (the superpowers flow wrote it). No plan, no tasks, no implementer of ours
+// until the review says so — just the whole-branch review, the verifier and one bounded fix wave.
+const reviewOnly = String(mode).toLowerCase() === 'review'
 const skipPlanReview = workflowArgs.skipPlanReview === true || light
 const fixCap = light ? Math.min(2, maxFixRounds) : maxFixRounds
 const rulings = [], deferred = [], done = [], openQuestions = [], minorDefects = []
 
-const missingArgs = [['project', project], ['projectDir', projectDir], ['plan', plan], ['taskKey', taskKey]]
+const missingArgs = [['project', project], ['projectDir', projectDir], ...(reviewOnly ? [['base', workflowArgs.base]] : [['plan', plan]]), ['taskKey', taskKey]]
   .filter(([, value]) => !value).map(([name]) => name)
 if (missingArgs.length) {
   log(`workflow args missing: ${missingArgs.join(', ')}`)
@@ -175,14 +178,14 @@ const sha = (label) => agent(
 
 const describe = (f) => `- [${f.id}] ${f.file}${f.line ? ':' + f.line : ''} — (${f.kind || 'defect'}/${f.severity}) ${f.issue}`
 const reviewPrompt = (base, head, extra) => `${RULES_PREAMBLE}Working directory: ${projectDir}. Project: ${project}.
-Run in Bash: ${SP_LOOKUP}; cd ${projectDir}; "$SP/review-package" ${plan} ${base} ${head}
+${plan ? `Run in Bash: ${SP_LOOKUP}; cd ${projectDir}; "$SP/review-package" ${plan} ${base} ${head}` : `Run in Bash: cd ${projectDir}; git diff --stat ${base}..${head} && git diff ${base}..${head} > .superpowers/review-${base}..${head}.diff (create .superpowers first)`}
 Then review the printed diff file per the dotnet-code-review skill (Roslyn first via roslyn-query.py).
 A violation of the conventions contract is at least Important. ${extra}
 Every finding carries a \`kind\`: \`defect\` for a reproducible failure in changed code (race, lost update, overflow, wrong rounding, swallowed exception, resource leak, null dereference, wrong branch), \`convention\` for a rules-contract breach, \`style\` for taste. Apply the severity floor in the skill: a defect is never below \`important\` unless it truly cannot be reached.
 approved=true only when no critical or important findings remain. Give every finding a short stable id (F1, F2, …); when re-reviewing, use the ids you were given in addressed[] verbatim. If this is not a re-review, return addressed as an empty array.`
 
 phase('Analyze')
-const analysis = await agent(
+const analysis = reviewOnly ? { tasks: [], conflicts: [], baseSha: workflowArgs.base } : await agent(
   `${RULES_PREAMBLE}Plan file: ${plan}. Working directory: ${projectDir}.
    Run in Bash: ${SP_LOOKUP}; cd ${projectDir}; for every "### Task N" heading in the plan run "$SP/task-brief" ${plan} N
    and return the printed brief path for each task. In the same Bash call run \`git -C ${projectDir} rev-parse HEAD\` and return it as baseSha.
@@ -196,7 +199,7 @@ if (!analysis) {
   return { status: 'blocked', mode: light ? 'light' : 'standard', done, rulings, deferred, openQuestions: ['The plan could not be analysed — check the plan path and rerun.'], finalVerdict: null, range: '' }
 }
 const tasks = analysis.tasks.map(t => ({ ...t, kind: ['code', 'tests', 'verify'].includes(t.kind) ? t.kind : 'code' }))
-if (!tasks.length) {
+if (!tasks.length && !reviewOnly) {
   log('no "### Task N" headings found in the plan')
   return { status: 'blocked', mode: light ? 'light' : 'standard', done, rulings, deferred, openQuestions: [{ task: 0, question: 'The plan has no "### Task N" headings — is the path right?' }], finalVerdict: null, range: '' }
 }
@@ -205,7 +208,7 @@ log(`${light ? 'light' : 'standard'} mode: ${tasks.length} tasks (${tasks.filter
 
 // The plan is reviewed by its own reviewer before any code exists; critical or important findings send it back to the author.
 let planVerdict = null
-if (!skipPlanReview) {
+if (!skipPlanReview && !reviewOnly) {
   phase('Plan review')
   planVerdict = await agent(
     `${RULES_PREAMBLE}Working directory: ${projectDir}. Project: ${project}. Task key: ${taskKey}. Plan: ${plan}. ${spec ? 'Spec: ' + spec + '.' : 'No spec file was given: review against the plan\'s own Goal/Context sections.'}
@@ -221,7 +224,7 @@ if (!skipPlanReview) {
 }
 
 const baseSha = analysis.baseSha || await sha('base-sha')
-let head = baseSha
+let head = reviewOnly ? (workflowArgs.head || await sha('review-head')) : baseSha
 let aborted = false
 
 for (const t of tasks) {
@@ -449,6 +452,23 @@ if (!aborted) {
   finalVerdict = await agent(
     reviewPrompt(baseSha, finalHead, `Whole-branch review. Deferred minor findings to triage (promote only if they matter now): ${JSON.stringify(unique(deferred))}.`),
     { agentType: AGENT.reviewer, schema: VERDICT, label: 'final-review' })
+  if (finalVerdict && reviewOnly) {
+    // In review mode this is the only review there is, so its findings go through the verifier before the fix wave.
+    phase('Verify')
+    const candidates = finalVerdict.findings.filter(f => f.severity !== 'minor' || f.kind === 'defect')
+    const votes = await parallel(candidates.map(f => () => agent(
+      `${RULES_PREAMBLE}Working directory: ${projectDir}. Diff range ${baseSha}..${finalHead}. Verify this finding: ${JSON.stringify(f)}
+       If it is real, also return severityAdjustment: the severity it deserves once you have seen the code (\`none\` to keep the reviewer's).`,
+      { agentType: AGENT.verifier, schema: VERIFY, label: 'verify#final', effort: 'low' })))
+    const kept = candidates.map((f, i) => {
+      const vote = votes[i]
+      if (!vote || !vote.real) { rulings.push({ stage: 'verify', noise: f, evidence: vote ? vote.evidence : 'verifier returned nothing' }); return null }
+      const adjusted = vote.severityAdjustment && vote.severityAdjustment !== 'none' ? vote.severityAdjustment : f.severity
+      if (adjusted !== f.severity) rulings.push({ stage: 'verify', id: f.id, severity: f.severity, raisedTo: adjusted, evidence: vote.evidence })
+      return { ...f, severity: adjusted }
+    }).filter(Boolean)
+    finalVerdict = { ...finalVerdict, findings: [...kept, ...finalVerdict.findings.filter(f => f.severity === 'minor' && f.kind !== 'defect')] }
+  }
   if (!finalVerdict) {
     rulings.push({ stage: 'final', status: 'no_verdict' })
   } else {
