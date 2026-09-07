@@ -85,7 +85,7 @@ def outcome_row(r):
     agents = m.get("pulse") or m.get("agents") or []
     quality = a.get("quality") or {}
     return [
-        r["label"],
+        r["label"] + ("" if (r.get("repeat") or 1) <= 1 else " ·r%d" % r["repeat"]) + (" ·forced %s" % r["forcedTier"] if r.get("forcedTier") else ""),
         route_cell(r),
         (m.get("reportedStatus") or m.get("subtype") or "–") + (" ⏱timeout" if r["session"].get("timedOut") else "")
         + (" ☠SIGTERM" if r["session"].get("exit") == 143 else ""),
