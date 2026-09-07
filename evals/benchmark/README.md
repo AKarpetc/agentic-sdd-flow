@@ -116,6 +116,10 @@ Tuning spots to look for: agents with the largest time ÷ tool-calls ratio (wait
 rounds that close nothing, reviewers producing findings the verifier rejects, plan review rejecting
 plans for hygiene rather than substance, sessions that hit `--max-turns` before finishing.
 
+## Results so far
+
+The 0.2.7 measurement (T1–T4), the quality analysis and the proposal for 0.2.8: [docs/benchmark-2026-09-findings.md](../../docs/benchmark-2026-09-findings.md).
+
 ## Caveats
 
 - Headless sessions cannot answer questions: a session that stops at a gate despite the preamble is

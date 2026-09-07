@@ -254,6 +254,8 @@ and the fixture never needs the .NET SDK.
 python3 evals/routing/run.py [--case NAME] [--workers 3] [--out DIR]
 ```
 
+The end-to-end benchmark against bare superpowers lives in `evals/benchmark/`; the 0.2.7 measurement, the quality analysis and the proposal for 0.2.8 are summarised in [docs/benchmark-2026-09-findings.md](docs/benchmark-2026-09-findings.md).
+
 `claude plugin eval` is the intended home for these cases once it is enabled for the account; the
 runner is a stand-in with the same shape (prompt, expected dispatch, forbidden dispatch).
 
