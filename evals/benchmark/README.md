@@ -138,6 +138,10 @@ python3 evals/benchmark/report.py results/bench-2026-09-06 > results/bench-2026-
 
 Run it from the plugin checkout with the plugin installed and updated to the version under test
 (`claude plugin list`), from a shell where `dotnet --version` works and `git config user.name` is set.
+What is committed from a run: the `<task>-<arm>.json` outcomes, `report.md`, and the driver script. The
+`.stream.jsonl` sessions stay local — 38 MB for one suite, and every number the report needs is already in
+the outcome file (dispatches, per-agent pulse, the final message). Keep them until the analysis is done.
+
 `run.py` must not be started from inside a Claude Code session that would be killed before it ends —
 the runner is a plain Python process and the workspaces under `--out` keep every stream, so a killed
 run can still be scored afterwards with `acceptance.py <task> <workspace>`. Ports 5200+ must be free
