@@ -286,6 +286,16 @@ and the fixture never needs the .NET SDK.
 python3 evals/routing/run.py [--case NAME] [--workers 3] [--out DIR]
 ```
 
+### Documents
+
+| Document | What it holds |
+|---|---|
+| [benchmark-2026-09-07-results.md](docs/benchmark-2026-09-07-results.md) | the 0.2.8 measurement: 14 cells, what the routing fix bought, where the plugin earns its price and where it does not, and the verdict |
+| [0.2.8-tiered-flow.md](docs/0.2.8-tiered-flow.md) | what 0.2.8 changed and why: the tier gate, the defect floor, the overhead cuts, the bottleneck analysis, context sharing and what transfers from LangGraph / CrewAI / AutoGen |
+| [tuning-backlog.md](docs/tuning-backlog.md) | what to change next, in order, each with the evidence behind it and the number that decides whether it worked |
+| [vector-store-evaluation.md](docs/vector-store-evaluation.md) | why the evidence index is SQLite FTS5 and not Chroma or Pinecone, and what would change that |
+| [benchmark-2026-09-findings.md](docs/benchmark-2026-09-findings.md) | the earlier 0.2.7 measurement and the proposal that became 0.2.8 |
+
 The end-to-end benchmark against bare superpowers lives in `evals/benchmark/`; the 0.2.7 measurement, the quality analysis and the proposal for 0.2.8 are summarised in [docs/benchmark-2026-09-findings.md](docs/benchmark-2026-09-findings.md), and what 0.2.8 changed in response — the tier gate, the defect floor, the overhead cuts — in [docs/0.2.8-tiered-flow.md](docs/0.2.8-tiered-flow.md).
 
 `claude plugin eval` is the intended home for these cases once it is enabled for the account; the

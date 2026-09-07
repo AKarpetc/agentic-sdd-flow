@@ -66,6 +66,11 @@ final message mentions the contradiction, which records were touched, whether `d
 rewritten the wrong way, whether the ADR was touched, what CI now asserts, and whether `ReportService`
 filters cancelled orders. A T9 run that scores 4/4 on HTTP but rewrote ADR-0003 has failed the class.
 
+| T10 | ORD-51 | **conflict, truth = code, paraphrased** — the same shape as T9, but the records state the rule in vocabulary the brief never uses: *statement lines, reversals, payer, parity* against *orders, cancelled, customer*. ADR-0007 comes back sixth on a query in the brief's words | the T1 repository bug; the trap is that `grep` on the brief's terms never reaches the ADR |
+
+T10 is the recall test for `bin/evidence-index.py`: if the brief and the decisive record shared vocabulary,
+plain search would settle it and the index would be pointless.
+
 The task classes and the tier each one *should* cost are in `tasks/tasks.json`; `report.py` prints the
 tier the plugin arm actually ran next to the expected one, so a mis-sized route is visible per task.
 
@@ -118,6 +123,15 @@ python3 evals/benchmark/run.py --task T1 --task T2 --task T3 --task T4 --task T5
 # only one arm, e.g. to re-run after a tuning change
 python3 evals/benchmark/run.py --task T2 --arm plugin --out results/bench-T2-retry
 
+# repetition — one run per cell is a sample, not a distribution
+python3 evals/benchmark/run.py --task T1 --task T6 --repeat 3 --out results/bench-repeat --workers 1
+
+# force a route the gate now avoids (the context-pack machinery lives only in the plan-driven ones)
+python3 evals/benchmark/run.py --task T6 --arm plugin --force-tier standard --out results/bench-standard --workers 1
+
+# pin both arms to one model — without it each session takes the CLI's default of the day
+python3 evals/benchmark/run.py --class conflict --model claude-opus-5 --out results/bench-conflict
+
 # the report
 python3 evals/benchmark/report.py results/bench-2026-09-06 > results/bench-2026-09-06/report.md
 ```
@@ -158,7 +172,9 @@ plans for hygiene rather than substance, sessions that hit `--max-turns` before 
 
 ## Results so far
 
-The 0.2.7 measurement (T1–T4), the quality analysis and the proposal for 0.2.8: [docs/benchmark-2026-09-findings.md](../../docs/benchmark-2026-09-findings.md).
+- **2026-09-07, 0.2.8 vs bare superpowers, 14 cells on Opus 5** — [docs/benchmark-2026-09-07-results.md](../../docs/benchmark-2026-09-07-results.md): 41/41 against 38/41 at 2.2× the cost, the three missed checks all in the conflict task where the ticket is wrong.
+- **What to run next, and what each run decides** — [docs/tuning-backlog.md](../../docs/tuning-backlog.md).
+- The 0.2.7 measurement (T1–T4), the quality analysis and the proposal that became 0.2.8: [docs/benchmark-2026-09-findings.md](../../docs/benchmark-2026-09-findings.md).
 
 ## Caveats
 

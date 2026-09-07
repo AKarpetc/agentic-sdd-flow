@@ -43,10 +43,11 @@ class Benchmark(unittest.TestCase):
     def test_conflict_tasks_are_mirrors_with_opposite_truths(self):
         conflict = {t: m for t, m in MANIFEST.items() if m["class"] == "conflict"}
         self.assertEqual({m["truth"] for m in conflict.values()}, {"brief", "code"}, "one variant per direction")
-        briefs = {open(os.path.join(BENCH, "tasks", t + ".md"), encoding="utf-8").read().replace(m["key"], "KEY") for t, m in conflict.items()}
-        self.assertEqual(len(briefs), 1, "the two variants must share one brief: only the records differ")
+        mirrors = {t: m for t, m in conflict.items() if t in ("T8", "T9")}
+        briefs = {open(os.path.join(BENCH, "tasks", t + ".md"), encoding="utf-8").read().replace(m["key"], "KEY") for t, m in mirrors.items()}
+        self.assertEqual(len(briefs), 1, "T8 and T9 must share one brief: only the records differ")
         self.assertIn("decide from the evidence", next(iter(briefs)))
-        for task, meta in conflict.items():
+        for task, meta in mirrors.items():
             overlay = os.path.join(BENCH, "tasks", meta["overlay"])
             service = open(os.path.join(overlay, "src", "Orders.Api", "Services", "ReportService.cs"), encoding="utf-8").read()
             self.assertIn("list.Count", service, "the code counts every order in both variants")
@@ -93,6 +94,26 @@ class Benchmark(unittest.TestCase):
         self.assertEqual(run.workflow_args({"args": '{"mode": "light", "plan": "x"}'}), {"mode": "light"})
         self.assertEqual(run.workflow_args({"args": {"scope": "compact"}}), {"scope": "compact"})
         self.assertEqual(run.workflow_args({"args": "not json"}), {})
+
+    def test_the_paraphrase_conflict_shares_no_decisive_word_with_its_records(self):
+        """T10 is the recall test: if the brief and the records used the same vocabulary, grep would settle it."""
+        brief = open(os.path.join(BENCH, "tasks", "T10.md"), encoding="utf-8").read().lower()
+        adr = open(os.path.join(BENCH, "tasks", "T10.overlay", "docs", "decisions", "0007-statement-parity.md"), encoding="utf-8").read().lower()
+        self.assertIn("open", brief)
+        self.assertIn("cancelled", brief)
+        for word in ("cancelled", "open orders"):
+            self.assertNotIn(word, adr, "the decisive ADR must not repeat the brief's vocabulary")
+        for word in ("parity", "reversal", "payer"):
+            self.assertIn(word, adr)
+            self.assertNotIn(word, brief)
+        self.assertEqual(MANIFEST["T10"]["truth"], "code")
+
+    def test_the_runner_can_repeat_and_force_a_route(self):
+        run = load("run")
+        import inspect
+        params = inspect.signature(run.run_pair).parameters
+        self.assertIn("repeat", params, "one run per cell is a sample, not a distribution")
+        self.assertIn("force_tier", params, "a route the gate avoids still has to be measurable")
 
     def test_endpoint_coverage_is_measured_on_every_task(self):
         acceptance = load("acceptance")

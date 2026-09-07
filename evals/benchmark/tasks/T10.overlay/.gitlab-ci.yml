@@ -1,0 +1,14 @@
+stages: [build, test, smoke]
+
+build:
+  stage: build
+  script: [dotnet build Orders.slnx -c Release]
+
+test:
+  stage: test
+  script: [dotnet test Orders.slnx -c Release --no-build]
+
+smoke-report:
+  stage: smoke
+  # Parity guard: the seeded payer 1 has four lines, one of them reversed; all four count.
+  script: [scripts/smoke-report.sh 1 "4 orders"]

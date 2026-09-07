@@ -289,13 +289,19 @@ def acceptance_t9(base):
     return acceptance_report(base, ((1, 4), (2, 2), (3, 1), (99, 0)))
 
 
+def acceptance_t10(base):
+    # Same truth as T9, but the records say it in vocabulary the brief never uses (statement lines, reversals).
+    return acceptance_report(base, ((1, 4), (2, 2), (3, 1), (99, 0)))
+
+
 ACCEPTANCE = {"T1": acceptance_t1, "T2": acceptance_t2, "T3": acceptance_t3, "T4": acceptance_t4,
-              "T5": acceptance_t5, "T6": acceptance_t6, "T7": acceptance_t7, "T8": acceptance_t8, "T9": acceptance_t9}
+              "T5": acceptance_t5, "T6": acceptance_t6, "T7": acceptance_t7, "T8": acceptance_t8, "T9": acceptance_t9, "T10": acceptance_t10}
 # The one check per task that cannot pass unless the pre-existing defect is fixed at its root.
 PLANTED = {"T1": "total customer 1 = 37.75", "T2": "cancel 102 -> 204", "T3": "customer 1 page 1 size 2 -> [101, 102] of 4",
            "T4": "report customer 2 contains 15.00", "T5": "unknown 999 -> 404 ProblemDetails naming the id",
            "T6": "104 Shipped -> Cancelled = 409", "T7": "customer 1 attention has 102, not 103",
-           "T8": "report customer 1 says 3 orders", "T9": "report customer 1 says 4 orders"}
+           "T8": "report customer 1 says 3 orders", "T9": "report customer 1 says 4 orders",
+           "T10": "report customer 1 says 4 orders"}
 
 
 def quality_common(workspace):
@@ -329,7 +335,7 @@ def quality_conflict(workspace, truth):
     service = text(os.path.join("src", "Orders.Api", "Services", "ReportService.cs"))
     ci = text(".gitlab-ci.yml")
     says_excluded = bool(re.search(r"\bnon-cancelled\b|never counted|cancelled orders are never", reporting, re.I))
-    says_all = bool(re.search(r"cancelled (?:ones )?included|all of the customer|every order", reporting, re.I))
+    says_all = bool(re.search(r"cancelled (?:ones )?included|all of the customer|every order|parity|reversal", reporting, re.I))
     records_touched = sorted(c for c in changed if c.startswith("docs/") or c in ("CHANGELOG.md", ".gitlab-ci.yml") or c.startswith("scripts/"))
     code_filters_cancelled = bool(re.search(r"OrderStatus\.Cancelled", service))
     return {

@@ -56,5 +56,13 @@
     "overlay": "T9.overlay",
     "truth": "code",
     "summary": "brief says non-cancelled, code counts all; ADR-0003, docs, CHANGELOG, CI smoke, consumer note and XML doc all back the code \u2014 the brief is wrong"
+  },
+  "T10": {
+    "key": "ORD-51",
+    "class": "conflict",
+    "expectedTier": "mix",
+    "overlay": "T10.overlay",
+    "truth": "code",
+    "summary": "paraphrase conflict: the brief says open/cancelled orders, the records say statement lines and reversals \u2014 the decisive ADR-0007 shares no decisive keyword with the brief"
   }
 }

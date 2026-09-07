@@ -226,11 +226,17 @@ def pulse_for(stream_path):
     return [{"type": v["type"], "seconds": round(v.get("last", 0) - v.get("started", 0), 1), "tools": v.get("tools", 0), "status": v.get("status")} for v in agents.values()]
 
 
-def run_pair(task, arm_name, arm, root, timeout, max_turns, port, model=None):
-    name = "%s-%s" % (task, arm_name)
+def run_pair(task, arm_name, arm, root, timeout, max_turns, port, model=None, repeat=1, force_tier=None):
+    """One (task, arm) session. `repeat` is the 1-based repetition index: one run per cell is a sample, not a
+    distribution, and routing is a model's judgement whose stability only repetition can show."""
+    name = "%s-%s" % (task, arm_name) + ("" if repeat <= 1 else "-r%d" % repeat)
     workspace = prepare_workspace(root, name, MANIFEST.get(task, {}).get("overlay"))
     stream_path = os.path.join(root, name + ".stream.jsonl")
-    session = run_session(prompt_for(task, arm), workspace, arm, stream_path, timeout, max_turns, model)
+    prompt = prompt_for(task, arm)
+    if force_tier and arm_name == "plugin":
+        prompt += ("\n\nRoute for this run: take the `%s` route and do not re-decide it — the sizing gate is "
+                   "not under test here." % force_tier)
+    session = run_session(prompt, workspace, arm, stream_path, timeout, max_turns, model)
     metrics = parse_stream(stream_path)
     pulse = pulse_for(stream_path) if arm_name == "plugin" else None
     acceptance = subprocess.run([sys.executable, ACCEPTANCE, task, workspace, "--port", str(port)], capture_output=True, text=True, timeout=1800)
@@ -239,13 +245,14 @@ def run_pair(task, arm_name, arm, root, timeout, max_turns, port, model=None):
     except ValueError:
         checks = {"error": acceptance.stdout[-800:] + acceptance.stderr[-800:]}
     outcome = {"task": task, "arm": arm_name, "label": arm["label"], "taskMeta": MANIFEST.get(task, {}),
+               "repeat": repeat, "forcedTier": force_tier,
                "session": session, "metrics": metrics, "pulse": pulse, "acceptance": checks, "workspace": workspace,
                "conflict": conflict_signals(task, metrics)}
     with open(os.path.join(root, name + ".json"), "w", encoding="utf-8") as handle:
         json.dump(outcome, handle, indent=2, ensure_ascii=False)
     acc = checks.get("acceptance", {})
     print("done  %-12s %-9s wall=%.0fs cost=$%.2f turns=%s acceptance=%s/%s build=%s tests=%s/%s route=%s (expected %s)" % (
-        task, arm_name, session["wallSeconds"], metrics["costUsd"] or 0, metrics["turns"], acc.get("passed"), acc.get("total"),
+        name, arm_name, session["wallSeconds"], metrics["costUsd"] or 0, metrics["turns"], acc.get("passed"), acc.get("total"),
         checks.get("build", {}).get("ok"), checks.get("tests", {}).get("passed"), checks.get("tests", {}).get("total"),
         metrics["route"] if arm_name == "plugin" else "-", MANIFEST.get(task, {}).get("expectedTier", "?")), flush=True)
     return outcome
@@ -263,6 +270,10 @@ def main():
     parser.add_argument("--workers", type=int, default=2)
     parser.add_argument("--port-base", type=int, default=5200, help="first acceptance port; give each concurrent runner its own range")
     parser.add_argument("--model", help="pin both arms to one model id (recorded in session.model); default: the CLI's default")
+    parser.add_argument("--repeat", type=int, default=1, help="run each (task, arm) N times; outcomes are suffixed -r2, -r3 …")
+    parser.add_argument("--force-tier", choices=("quick", "mix", "light", "standard", "deep"),
+                        help="tell the plugin arm which route to take instead of letting the gate decide "
+                             "(for exercising a route deliberately, e.g. the plan-driven ones)")
     args = parser.parse_args()
     arms = json.load(open(os.path.join(TASKS, "arms.json")))
     tasks = list(args.task or [])
@@ -270,10 +281,13 @@ def main():
         tasks += [task for task, meta in MANIFEST.items() if meta["class"] == klass and task not in tasks]
     if not tasks:
         parser.error("give at least one --task or --class")
-    selected = [(t, a) for t in sorted(set(tasks), key=lambda t: list(MANIFEST).index(t) if t in MANIFEST else 99) for a in (args.arm or list(arms))]
+    ordered = sorted(set(tasks), key=lambda t: list(MANIFEST).index(t) if t in MANIFEST else 99)
+    selected = [(t, a, r) for t in ordered for a in (args.arm or list(arms)) for r in range(1, max(1, args.repeat) + 1)]
     os.makedirs(args.out, exist_ok=True)
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = [pool.submit(run_pair, t, a, arms[a], args.out, args.timeout, args.max_turns, args.port_base + i, args.model) for i, (t, a) in enumerate(selected)]
+        futures = [pool.submit(run_pair, t, a, arms[a], args.out, args.timeout, args.max_turns,
+                               args.port_base + i, args.model, r, args.force_tier)
+                   for i, (t, a, r) in enumerate(selected)]
         for future in concurrent.futures.as_completed(futures):
             try:
                 future.result()
