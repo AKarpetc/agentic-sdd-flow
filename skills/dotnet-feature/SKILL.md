@@ -53,6 +53,17 @@ the brief names). Do not explore further to decide — the gate is meant to be c
 Announce the outcome in one line: `Tier: light — one endpoint in shop-api, no store or contract change.`
 De-escalation mid-run is not allowed: once the design pipeline has run, its spec is executed.
 
+🔴 **When the brief contradicts the repository, nobody picks a side.** If the budgeted look (or
+brainstorming, or the implementer) finds that a criterion in the brief states a behaviour that the code,
+a test, a CI assertion, an ADR, a doc, a comment or a consumer note contradicts, dispatch
+`agentic-sdd-flow:evidence-reconciler` with the claim, the observed behaviour and the sources you saw
+**before** anything changes that behaviour. It weighs every source (executed > decided > descriptive >
+intent) and returns `brief`, `code` or `undecided` with the evidence. `brief` → the code drifted: fix it
+at the root and correct the stale comment/doc. `code` or `undecided` → the brief is wrong or the record is
+split: show the evidence table to the user and **stop until they rule** — never "fix" an ADR, a CI
+assertion or a consumer contract to match a ticket. Inside `dotnet-sdd` this happens on its own
+(Reconcile phase; the workflow returns `status: 'contradiction'` for you to act on).
+
 ## 3q. `quick` — inline
 
 No brainstorming, no plan, no workflow. In this session:
@@ -136,5 +147,10 @@ resume: the cached rejection would be replayed. Start a fresh run instead.
 - `status: 'unstable'` → show `rulings` (parked/stalled findings) and `deferred`; ask whether to
   run another fix wave, park them, or stop. If the run was `light` and something serious is parked,
   offer the `standard` rerun rather than another light wave.
+- `status: 'contradiction'` → show `reconciled` verbatim: for each entry the claim, the observed
+  behaviour, the verdict with its confidence, the evidence table and the stale sources. Ask the user
+  which is right (or relay the reconciler's questions to the owner it names); then rerun the workflow
+  with `args.truth = { "<taskId>": "brief" | "code" }`. With `code`, the brief is wrong: say so in the
+  final report, and the ticket's author corrects it — the repository's records stay as they are.
 
 Always finish with the tier you ran, the branch name and "not pushed".

@@ -131,6 +131,13 @@ def main():
             agents = agent_rows(r)
             if agents:
                 out += ["Longest agents:", "", table(["agent", "time", "tool calls", "note"], agents), ""]
+            conflict = r.get("conflict")
+            if conflict:
+                q = r.get("acceptance", {}).get("quality", {})
+                wrong_way = q.get("docRewrittenTowardBrief") or q.get("docRewrittenTowardCode")
+                out += ["Conflict (truth = %s): noticed in the final message %s · records touched: %s · doc rewritten the wrong way %s · ADR touched %s · CI smoke now expects %s · code filters cancelled %s" % (
+                    conflict.get("truth"), "✅" if conflict.get("noticedInFinalMessage") else "❌", ", ".join(q.get("recordsTouched") or []) or "none",
+                    "❌ yes" if wrong_way else "✅ no", "yes" if q.get("adrTouched") else "no", q.get("ciSmokeExpects"), q.get("reportServiceFiltersCancelled")), ""]
             failed = [c for c in r.get("acceptance", {}).get("acceptance", {}).get("checks", []) if not c["ok"]]
             if failed:
                 out += ["Failed acceptance checks:", ""] + ["- %s — %s" % (c["name"], c["detail"][:140]) for c in failed] + [""]
@@ -147,7 +154,7 @@ def main():
         cell["acc_total"] += acc.get("total", 0) or 0
         cell["n"] += 1
     if by_class:
-        order = ["simple", "medium", "complex", "vague"]
+        order = ["simple", "medium", "complex", "vague", "conflict"]
         class_rows = []
         for klass in sorted(by_class, key=lambda k: order.index(k) if k in order else 99):
             for arm, cell in sorted(by_class[klass].items()):

@@ -300,6 +300,11 @@ When a caller asks for findings with a `severity` field (the `dotnet-sdd` and `a
 | `convention` | a breach of the rules contract or the checklist |
 | `style` | naming, idiom, taste — nothing behaves differently |
 
+A change that flips a behaviour which an ADR, a consumer note, a CI assertion, a changelog entry or the
+member's own XML doc states the other way — without touching that record or citing a ruling — is a
+`defect` (`important`): the code and the repository's commitments now disagree, and one of them will
+bite a consumer. Name the record; `evidence-reconciler` decides which side is right.
+
 🔴 **Severity floor for defects.** A finding whose `kind` is `defect` is **never below `important`**,
 whatever section it appears in. A check-then-act race written up under *Refactoring Suggestions* is an
 `important` `defect`, not a `minor` suggestion. The only defect that stays `minor` is one whose failing

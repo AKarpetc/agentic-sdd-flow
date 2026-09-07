@@ -30,12 +30,48 @@ class Benchmark(unittest.TestCase):
 
     def test_manifest_covers_every_class_and_agrees_with_the_files(self):
         classes = {meta["class"] for meta in MANIFEST.values()}
-        self.assertEqual(classes, {"simple", "medium", "complex", "vague"}, "the suite must span the whole size range")
+        self.assertEqual(classes, {"simple", "medium", "complex", "vague", "conflict"}, "the suite must span the whole size range and the conflict class")
         self.assertTrue({meta["expectedTier"] for meta in MANIFEST.values()} <= {"quick", "light", "standard", "deep"})
         keys = [meta["key"] for meta in MANIFEST.values()]
         self.assertEqual(len(keys), len(set(keys)), "task keys must be unique: git hygiene is scored per key")
         files = {os.path.basename(p)[:-3] for p in glob.glob(os.path.join(BENCH, "tasks", "T*.md"))}
         self.assertEqual(files, set(MANIFEST), "every task file needs a manifest entry and vice versa")
+        for task, meta in MANIFEST.items():
+            if "overlay" in meta:
+                self.assertTrue(os.path.isdir(os.path.join(BENCH, "tasks", meta["overlay"])), meta["overlay"])
+
+    def test_conflict_tasks_are_mirrors_with_opposite_truths(self):
+        conflict = {t: m for t, m in MANIFEST.items() if m["class"] == "conflict"}
+        self.assertEqual({m["truth"] for m in conflict.values()}, {"brief", "code"}, "one variant per direction")
+        briefs = {open(os.path.join(BENCH, "tasks", t + ".md"), encoding="utf-8").read().replace(m["key"], "KEY") for t, m in conflict.items()}
+        self.assertEqual(len(briefs), 1, "the two variants must share one brief: only the records differ")
+        self.assertIn("decide from the evidence", next(iter(briefs)))
+        for task, meta in conflict.items():
+            overlay = os.path.join(BENCH, "tasks", meta["overlay"])
+            service = open(os.path.join(overlay, "src", "Orders.Api", "Services", "ReportService.cs"), encoding="utf-8").read()
+            self.assertIn("list.Count", service, "the code counts every order in both variants")
+            ci = open(os.path.join(overlay, ".gitlab-ci.yml"), encoding="utf-8").read()
+            self.assertIn('"3 orders"' if meta["truth"] == "brief" else '"4 orders"', ci, "CI pins the number the records support")
+        self.assertTrue(os.path.isfile(os.path.join(BENCH, "tasks", conflict["T9"]["overlay"], "docs", "decisions", "0003-report-counts-every-order.md")))
+
+    def test_conflict_signals_read_the_untouched_overlays_correctly(self):
+        run = load("run")
+        acceptance = load("acceptance")
+        import shutil
+        import tempfile
+        for task, meta in ((t, m) for t, m in MANIFEST.items() if m["class"] == "conflict"):
+            with self.subTest(task=task), tempfile.TemporaryDirectory() as tmp:
+                ws = os.path.join(tmp, task)
+                shutil.copytree(os.path.join(BENCH, "fixture"), ws, ignore=shutil.ignore_patterns("bin", "obj"))
+                shutil.copytree(os.path.join(BENCH, "tasks", meta["overlay"]), ws, dirs_exist_ok=True)
+                q = acceptance.quality_conflict(ws, meta["truth"])
+                self.assertEqual(q["reportingDocSaysExcluded"], meta["truth"] == "brief")
+                self.assertEqual(q["reportingDocSaysAll"], meta["truth"] == "code")
+                self.assertFalse(q["docRewrittenTowardBrief"] or q["docRewrittenTowardCode"])
+                self.assertEqual(q["ciSmokeExpects"], "3" if meta["truth"] == "brief" else "4")
+        self.assertTrue(run.conflict_signals("T9", {"finalText": "NOTES: kept the count per ADR-0003"})["noticedInFinalMessage"])
+        self.assertFalse(run.conflict_signals("T8", {"finalText": "NOTES: done"})["noticedInFinalMessage"])
+        self.assertIsNone(run.conflict_signals("T5", {"finalText": "conflict"}))
 
     def test_runner_and_checker_take_the_keys_from_the_manifest(self):
         run = load("run")

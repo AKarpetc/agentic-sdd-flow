@@ -6,6 +6,7 @@ export const meta = {
     { title: 'Analyze', detail: 'split the plan into task briefs' },
     { title: 'Plan review', detail: 'plan-reviewer gates the plan against the spec and the conventions' },
     { title: 'Implement' },
+    { title: 'Reconcile', detail: 'evidence-reconciler decides when the brief and the repository disagree' },
     { title: 'Tests' },
     { title: 'Debug', detail: 'debugger finds the root cause before another fix' },
     { title: 'Review' },
@@ -24,6 +25,7 @@ const AGENT = {
   verifier: PREFIX + 'findings-verifier',
   debugger: PREFIX + 'debugger',
   planReviewer: PREFIX + 'plan-reviewer',
+  reconciler: PREFIX + 'evidence-reconciler',
 }
 // The default workflow agent does not receive the injected contract, so every prompt asks for it explicitly.
 const RULES_PREAMBLE = 'Read the plugin rules contract (rules/RULES-CONTRACT.md under the agentic-sdd-flow plugin root, or the <rules-contract> block already in your context) before anything else.\n'
@@ -59,6 +61,22 @@ const REPORT = {
     concerns: { type: 'string' },
     questions: { type: 'array', items: { type: 'string' } },
     reportPath: { type: 'string' },
+    contradictions: { type: 'array', items: {
+      type: 'object', required: ['claim', 'observed'],
+      properties: { claim: { type: 'string' }, observed: { type: 'string' }, sources: { type: 'array', items: { type: 'string' } } } } },
+  },
+}
+const RECONCILIATION = {
+  type: 'object', required: ['verdict', 'confidence', 'evidence', 'rationale', 'action', 'staleSources'],
+  properties: {
+    verdict: { enum: ['brief', 'code', 'undecided'] },
+    confidence: { enum: ['high', 'medium', 'low'] },
+    evidence: { type: 'array', items: { type: 'object', required: ['source', 'tier', 'supports'],
+      properties: { source: { type: 'string' }, tier: { enum: ['executed', 'decided', 'descriptive', 'intent'] }, supports: { enum: ['brief', 'code'] }, date: { type: 'string' }, independent: { type: 'boolean' }, note: { type: 'string' } } } },
+    rationale: { type: 'string' },
+    action: { type: 'string' },
+    staleSources: { type: 'array', items: { type: 'string' } },
+    questions: { type: 'array', items: { type: 'string' } },
   },
 }
 // `kind` decides blocking independently of `severity`: a reproducible failure filed under a soft section
@@ -131,7 +149,10 @@ if (typeof workflowArgs === 'string') {
   try { workflowArgs = JSON.parse(workflowArgs) } catch { workflowArgs = null }
 }
 if (!workflowArgs || typeof workflowArgs !== 'object' || Array.isArray(workflowArgs)) workflowArgs = {}
-const { project, projectDir, plan, taskKey, spec = '', maxFixRounds = 5, stallRounds = 2, answers = {}, mode = 'standard' } = workflowArgs
+const { project, projectDir, plan, taskKey, spec = '', maxFixRounds = 5, stallRounds = 2, answers = {}, mode = 'standard', truth = {} } = workflowArgs
+// truth: { "<taskId>": "brief" | "code" } — the caller's ruling on a contradiction the reconciler could not
+// settle on its own (a `code` verdict sends the brief back to its author; the caller decides, then reruns).
+const reconciled = []
 // light: one small single-project change — no plan review, no per-task review loop, one whole-branch
 // review at the end. standard: the full per-task gate. The dotnet-feature skill sizes the change and picks.
 const light = String(mode).toLowerCase() === 'light'
@@ -215,11 +236,51 @@ for (const t of tasks) {
         `${RULES_PREAMBLE}Working directory: ${projectDir}. Project: ${project}. Task key: ${taskKey}.
          Task ${t.id}: ${t.title}. Brief: ${t.briefPath}. Report file: ${projectDir}/.superpowers/sdd/task-${t.id}-report.md.
          Commit on the branch that is already checked out — never create or switch a branch. Write only inside ${projectDir}.
+         If the brief asserts a behaviour that the code, its tests, CI, an ADR, a doc or a consumer note contradicts, do not pick a side: stop before changing that behaviour, return status needs_context with the contradiction in \`contradictions\` (claim, observed with file:line, sources you saw) — the workflow reconciles it.
          ${answers[t.id] ? 'Answers to your earlier open questions: ' + JSON.stringify(answers[t.id]) : ''}
          ${attempt ? 'A prior run returned escalate_model; this run has higher effort — read the report file first.' : ''}`,
         { agentType: AGENT.implementer, schema: REPORT, label: `impl#${t.id}`, effort: attempt ? 'high' : undefined })
       if (r && r.status === 'escalate_model' && attempt === 0) { log(`task ${t.id}: escalate_model → retry with effort high`); continue }
       report = r
+    }
+    // The brief and the repository disagree: nobody guesses. The reconciler weighs every source of truth;
+    // the code is fixed when the enforced record backs the brief, and the brief goes back to its author when
+    // the record backs the code — unless the caller already ruled with args.truth[taskId].
+    const contradictions = (report && report.contradictions) || []
+    if (report && contradictions.length) {
+      phase('Reconcile')
+      const verdicts = await parallel(contradictions.map(c => () => agent(
+        `${RULES_PREAMBLE}Working directory: ${projectDir}. Project: ${project}. Task ${t.id}: ${t.title}. Brief: ${t.briefPath}.
+         Claim (what the brief says): ${c.claim}
+         Observed (what the code does): ${c.observed}
+         Sources already noticed: ${(c.sources || []).join('; ') || 'none'}
+         Reconcile per your agent instructions and return the JSON.`,
+        { agentType: AGENT.reconciler, schema: RECONCILIATION, label: `reconcile#${t.id}` })))
+      const rulingsForTask = contradictions.map((c, i) => ({ task: t.id, claim: c.claim, observed: c.observed, verdict: verdicts[i] ? verdicts[i].verdict : 'undecided', confidence: verdicts[i] ? verdicts[i].confidence : 'low', evidence: verdicts[i] ? verdicts[i].evidence : [], rationale: verdicts[i] ? verdicts[i].rationale : 'reconciler returned nothing', action: verdicts[i] ? verdicts[i].action : '', staleSources: verdicts[i] ? verdicts[i].staleSources : [], questions: verdicts[i] ? (verdicts[i].questions || []) : [] }))
+      reconciled.push(...rulingsForTask)
+      const forced = truth[t.id]
+      const settled = rulingsForTask.every(r => forced || (r.verdict === 'brief' && r.confidence !== 'low'))
+      if (!settled) {
+        // A `code` or `undecided` verdict is the caller's decision: return the evidence, do not implement a guess.
+        rulings.push({ task: t.id, status: 'contradiction', reconciled: rulingsForTask })
+        openQuestions.push(...rulingsForTask.filter(r => r.verdict !== 'brief' || r.confidence === 'low').map(r => ({ task: t.id, question: `[${r.verdict}/${r.confidence}] "${r.claim}" vs "${r.observed}" — ${r.rationale}${r.questions.length ? ' Questions: ' + r.questions.join(' | ') : ''} Rerun with args.truth["${t.id}"] = "brief" | "code".` })))
+        log(`task ${t.id}: contradiction not settled (${rulingsForTask.map(r => r.verdict).join(', ')}) — stopping for the caller's ruling`)
+        aborted = true
+        break
+      }
+      const direction = forced || 'brief'
+      const instruction = direction === 'brief'
+        ? 'The reconciler ruled that the brief is right and the code drifted: fix the code at its root so the behaviour the brief states holds, and correct these stale sources in the same commit: '
+        : 'The caller ruled that the recorded behaviour of the repository is right and the brief is wrong: keep the recorded behaviour, implement the rest of the task around it, and correct these stale sources (the text of the brief lives outside the repository — say so in your report): '
+      phase('Implement')
+      const redo = await agent(
+        `${RULES_PREAMBLE}Working directory: ${projectDir}. Project: ${project}. Task key: ${taskKey}.
+         Task ${t.id}: ${t.title}. Brief: ${t.briefPath}. Report file: ${report.reportPath}. Read your report first — you stopped on a contradiction.
+         ${instruction}${rulingsForTask.flatMap(r => r.staleSources).join('; ') || 'none named'}.
+         Evidence: ${JSON.stringify(rulingsForTask.map(r => ({ verdict: r.verdict, rationale: r.rationale, action: r.action })))}
+         Commit on the branch that is already checked out. Write only inside ${projectDir}.`,
+        { agentType: AGENT.implementer, schema: REPORT, label: `impl#${t.id}.reconciled` })
+      if (redo) { report = { ...redo, commits: [...(report.commits || []), ...(redo.commits || [])], contradictions: [] } }
     }
     if (!report || report.status === 'blocked' || report.status === 'needs_context' || report.status === 'escalate_model') {
       const status = report ? report.status : 'blocked'
@@ -429,4 +490,4 @@ if (!aborted) {
 const deferredUnique = unique(deferred)
 const status = aborted ? 'blocked' : (rulings.some(r => r.status === 'unstable') ? 'unstable' : 'done')
 log(`dotnet-sdd finished (${light ? 'light' : 'standard'}): ${status}, ${done.length}/${tasks.length} tasks approved, ${deferredUnique.length} minors deferred`)
-return { status, mode: light ? 'light' : 'standard', done, rulings, deferred: deferredUnique, openQuestions, planVerdict, finalVerdict, range: `${baseSha}..${finalHead}` }
+return { status: status === 'blocked' && rulings.some(r => r.status === 'contradiction') ? 'contradiction' : status, mode: light ? 'light' : 'standard', done, rulings, reconciled, deferred: deferredUnique, openQuestions, planVerdict, finalVerdict, range: `${baseSha}..${finalHead}` }

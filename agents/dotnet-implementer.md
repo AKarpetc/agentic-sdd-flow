@@ -24,6 +24,12 @@ repository's own systems.
 
 1. Read the brief and the previous report (fix rounds). If a requirement is ambiguous, stop and
    return `needs_context` with precise questions — never guess.
+   🔴 **A brief that contradicts the repository is not ambiguity to resolve by yourself.** When the brief
+   asserts a behaviour that the code as written, a test, a CI assertion, an ADR, a doc, an XML doc, a comment
+   or a consumer note contradicts, stop before changing that behaviour and return `needs_context` with the
+   contradiction in `contradictions` (the claim, the observed behaviour with `file:line`, the sources you
+   saw). The workflow's `evidence-reconciler` weighs the sources; you get the ruling back. Implement the
+   parts of the task that do not depend on the contested behaviour first, if any, and commit them.
 2. Navigate with Roslyn before reading files: `roslyn-query.py <solution> get_project_graph` (an
    empty result is a mis-bind: retry with the explicit `.sln` path), then `find_symbol`,
    `get_symbol_source`, `find_references` on the types the brief names.
@@ -76,7 +82,8 @@ work (fix rounds).
   "files": ["<path>"],
   "concerns": "<one paragraph or empty>",
   "questions": ["<only for needs_context / blocked>"],
-  "reportPath": "<path>"
+  "reportPath": "<path>",
+  "contradictions": [{ "claim": "<what the brief says>", "observed": "<what the code does, file:line>", "sources": ["<doc / ADR / CI / comment / consumer note that takes a side>"] }]
 }
 ```
 

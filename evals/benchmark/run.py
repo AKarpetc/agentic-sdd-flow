@@ -41,9 +41,13 @@ def prompt_for(task, arm):
     ])
 
 
-def prepare_workspace(root, name):
+def prepare_workspace(root, name, overlay=None):
+    """A fresh copy of the fixture; a task overlay (tasks/<name>.overlay/) is copied on top of it, so a task
+    can ship its own docs, CI file or a variant of a source file without touching the shared fixture."""
     workspace = os.path.join(root, name)
     shutil.copytree(FIXTURE, workspace, ignore=shutil.ignore_patterns("bin", "obj"))
+    if overlay:
+        shutil.copytree(os.path.join(TASKS, overlay), workspace, dirs_exist_ok=True)
     git = ["git", "-C", workspace, "-c", "user.name=bench", "-c", "user.email=bench@example.com"]
     subprocess.run(["git", "init", "-q", "-b", "main", workspace], check=True)
     subprocess.run(git + ["add", "."], check=True)
@@ -116,6 +120,18 @@ def workflow_args(inp):
     if not isinstance(raw, dict):
         return {}
     return {key: raw[key] for key in ("mode", "scope") if key in raw}
+
+
+CONFLICT_NOTICED = re.compile(r"contradict|conflict|inconsisten|mismatch|disagree|at odds|drift|ADR-0003|INC-231|source of truth", re.I)
+
+
+def conflict_signals(task, metrics):
+    """For the conflict class: did the session say, in its own final message, that the brief and the records disagree?"""
+    meta = MANIFEST.get(task, {})
+    if meta.get("class") != "conflict":
+        return None
+    text = metrics.get("finalText") or ""
+    return {"truth": meta.get("truth"), "noticedInFinalMessage": bool(CONFLICT_NOTICED.search(text))}
 
 
 def route_taken(dispatches):
@@ -199,7 +215,7 @@ def pulse_for(stream_path):
 
 def run_pair(task, arm_name, arm, root, timeout, max_turns, port, model=None):
     name = "%s-%s" % (task, arm_name)
-    workspace = prepare_workspace(root, name)
+    workspace = prepare_workspace(root, name, MANIFEST.get(task, {}).get("overlay"))
     stream_path = os.path.join(root, name + ".stream.jsonl")
     session = run_session(prompt_for(task, arm), workspace, arm, stream_path, timeout, max_turns, model)
     metrics = parse_stream(stream_path)
@@ -210,7 +226,8 @@ def run_pair(task, arm_name, arm, root, timeout, max_turns, port, model=None):
     except ValueError:
         checks = {"error": acceptance.stdout[-800:] + acceptance.stderr[-800:]}
     outcome = {"task": task, "arm": arm_name, "label": arm["label"], "taskMeta": MANIFEST.get(task, {}),
-               "session": session, "metrics": metrics, "pulse": pulse, "acceptance": checks, "workspace": workspace}
+               "session": session, "metrics": metrics, "pulse": pulse, "acceptance": checks, "workspace": workspace,
+               "conflict": conflict_signals(task, metrics)}
     with open(os.path.join(root, name + ".json"), "w", encoding="utf-8") as handle:
         json.dump(outcome, handle, indent=2, ensure_ascii=False)
     acc = checks.get("acceptance", {})

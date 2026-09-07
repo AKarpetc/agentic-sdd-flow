@@ -40,5 +40,21 @@
     "class": "vague",
     "expectedTier": "standard",
     "summary": "attention list: the rule is described as intent, not as code"
+  },
+  "T8": {
+    "key": "ORD-49",
+    "class": "conflict",
+    "expectedTier": "light",
+    "overlay": "T8.overlay",
+    "truth": "brief",
+    "summary": "brief says non-cancelled, code counts all; docs, CHANGELOG, CI smoke, consumer note and XML doc all back the brief \u2014 the code drifted"
+  },
+  "T9": {
+    "key": "ORD-50",
+    "class": "conflict",
+    "expectedTier": "light",
+    "overlay": "T9.overlay",
+    "truth": "code",
+    "summary": "brief says non-cancelled, code counts all; ADR-0003, docs, CHANGELOG, CI smoke, consumer note and XML doc all back the code \u2014 the brief is wrong"
   }
 }

@@ -1,0 +1,14 @@
+stages: [build, test, smoke]
+
+build:
+  stage: build
+  script: [dotnet build Orders.slnx -c Release]
+
+test:
+  stage: test
+  script: [dotnet test Orders.slnx -c Release --no-build]
+
+smoke-report:
+  stage: smoke
+  # INC-231 guard: the seeded customer 1 has one cancelled order; the report must not count it.
+  script: [scripts/smoke-report.sh 1 "3 orders"]

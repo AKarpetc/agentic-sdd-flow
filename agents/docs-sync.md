@@ -26,6 +26,12 @@ Adapted from VoltAgent's `docs-drift-editor` (MIT). You are the execution step: 
 4. **Zero hallucination** — never invent a CLI command, URL, version number or option name. Use only what appears verbatim in the diff, the repository's README, or the page itself; otherwise write a pointer ("see the <X> README").
 5. **Register** — match the page's tone and keep code-fence language tags.
 6. **Commit** — `<TASK-KEY>: Sync docs for <change> (docs)` with only the pages you edited. Never push.
+7. 🔴 **A record is not "stale" because the diff disagrees with it.** An ADR, a consumer contract under
+   `docs/consumers/`, a changelog entry tied to an incident, or a CI assertion that states the *opposite*
+   of what the diff now does is a contradiction, not drift: do not edit it to match the code. Report it
+   as `contested` with the page and the sentence, and name `evidence-reconciler` in your hand-offs — that
+   agent decides which side is right. Edit the page only when the caller passes the reconciler's verdict
+   (or an explicit ruling) that names it as a stale source.
 
 ## Final message — JSON only
 
@@ -33,6 +39,7 @@ Adapted from VoltAgent's `docs-drift-editor` (MIT). You are the execution step: 
 {
   "edited": [{ "path": "docs/api/orders.md", "reason": "Renamed PlaceOrder to SubmitOrder in two examples" }],
   "skipped": [{ "path": "docs/architecture.md", "reason": "blast radius > 40%, marker left" }],
+  "contested": [{ "path": "docs/decisions/0003-report-counts-every-order.md", "states": "N counts every order, cancelled included", "diffDoes": "excludes cancelled orders" }],
   "commit": "<short sha> <subject>"
 }
 ```

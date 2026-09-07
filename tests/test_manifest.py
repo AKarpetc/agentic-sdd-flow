@@ -260,8 +260,8 @@ class WorkDistribution(unittest.TestCase):
 
     EXPECTED = {
         "dotnet-sdd.js": {
-            "Analyze": set(), "Plan review": {"planReviewer"}, "Implement": {"implementer"}, "Tests": {"tests"},
-            "Debug": {"debugger"}, "Review": {"reviewer"}, "Verify": {"verifier"}, "Fix": {"implementer"},
+            "Analyze": set(), "Plan review": {"planReviewer"}, "Implement": {"implementer"}, "Reconcile": {"reconciler"},
+            "Tests": {"tests"}, "Debug": {"debugger"}, "Review": {"reviewer"}, "Verify": {"verifier"}, "Fix": {"implementer"},
             "Final review": {"reviewer"},
         },
         "architecture-design.js": {
@@ -270,7 +270,7 @@ class WorkDistribution(unittest.TestCase):
             "Record": set(), "Spec review": {"reviewer"},
         },
     }
-    PARALLEL = {"dotnet-sdd.js": {"Verify"}, "architecture-design.js": {"Context", "Proposals", "Judge"}}
+    PARALLEL = {"dotnet-sdd.js": {"Verify", "Reconcile"}, "architecture-design.js": {"Context", "Proposals", "Judge"}}
 
     @staticmethod
     def segments(text):
@@ -399,6 +399,24 @@ class Tiers(unittest.TestCase):
         tests_writer = read(os.path.join(ROOT, "agents", "tests-writer.md"))
         self.assertIn("git rev-parse HEAD", tests_writer)
         self.assertIn("Cut the padding", tests_writer)
+
+    def test_a_contradiction_is_reconciled_not_guessed(self):
+        text = self.sdd()
+        self.assertIn("contradictions: { type: 'array'", text, "the implementer reports a brief-vs-repository contradiction instead of picking a side")
+        self.assertIn("verdict: { enum: ['brief', 'code', 'undecided'] }", text)
+        self.assertIn("status: 'contradiction'", text, "a code/undecided verdict returns the evidence to the caller")
+        self.assertIn("truth[t.id]", text, "the caller's ruling reruns the task")
+        agent = read(os.path.join(ROOT, "agents", "evidence-reconciler.md"))
+        for tier in ("executed", "decided", "descriptive", "intent"):
+            self.assertIn(tier, agent)
+        self.assertIn("never", agent.lower())
+        implementer = read(os.path.join(ROOT, "agents", "dotnet-implementer.md"))
+        self.assertIn("contradictions", implementer)
+        docs_sync = read(os.path.join(ROOT, "agents", "docs-sync.md"))
+        self.assertIn("evidence-reconciler", docs_sync, "docs-sync must not rewrite a record toward a brief")
+        feature = self.feature()
+        self.assertIn("evidence-reconciler", feature)
+        self.assertIn("status: 'contradiction'", feature)
 
     def test_design_pipeline_can_run_compact(self):
         text = read(os.path.join(ROOT, "workflows", "architecture-design.js"))

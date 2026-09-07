@@ -5,7 +5,8 @@ on? This benchmark answers with numbers instead of impressions: the same feature
 real .NET solution, run twice — once with the plugin disabled and once with it on — and scored by the
 same external checks.
 
-Since 0.2.8 the suite spans the whole size range — **simple, medium, complex, vague** (`tasks/tasks.json`)
+Since 0.2.8 the suite spans the whole size range — **simple, medium, complex, vague**, plus a **conflict**
+pair where the brief and the repository disagree (`tasks/tasks.json`)
 — because the interesting question is no longer "is the plugin better" but **"does it charge in
 proportion to the work"**. A flow that delivers a one-file fix for $32 loses to one that delivers it for
 $8, however good its tests are.
@@ -53,6 +54,17 @@ investigation resolves, so the debugging stage is exercised as well:
 | T5 | ORD-46 | **simple** — ProblemDetails bodies and id validation on the existing `GET /api/orders/{id}`. One file, no new surface: the cost floor of each flow | the endpoint answers a missing order with an empty 404 body today, so the `title`/`detail` check cannot pass without touching existing behaviour |
 | T6 | ORD-47 | **complex** — `POST /api/orders/{id}/transitions` with a legal-transition table, idempotency by `requestId`, an audit trail at `GET /api/orders/{id}/history`, and the rule kept in exactly one place with `CanCancelAsync` expressed through it | reusing the existing `CanCancelAsync` as the rule source keeps `Placed or Shipped`, and `104 Shipped → Cancelled` then answers 200 instead of 409 |
 | T7 | ORD-48 | **vague** — `GET /api/customers/{customerId}/attention`: the brief states the rule as business intent ("cancelled never, paid-not-shipped always, the rest is your judgement") and names no structure | the T1 repository bug again (the list goes through `ListByCustomerAsync`) |
+
+| T8 | ORD-49 | **conflict, truth = brief** — expose the customer report; the brief says the count excludes cancelled orders, the code counts all, and `docs/reporting.md`, `CHANGELOG.md` (1.4.2 / INC-231), the CI smoke test (`"3 orders"`), the consumer note and the XML doc all back the brief: the code drifted | the T1 repository bug, plus `list.Count` where the record says non-cancelled |
+| T9 | ORD-50 | **conflict, truth = code** — the *same brief*, but ADR-0003, `docs/reporting.md`, `CHANGELOG.md`, the CI smoke test (`"4 orders"`), the finance-export consumer note and the XML doc all back the code: the brief is wrong | the T1 repository bug; the trap is "fixing" the count to 3 and rewriting the records to match the ticket |
+
+The conflict pair (`tasks/T8.overlay/`, `tasks/T9.overlay/`, copied over the fixture by `run.py`) measures
+critical thinking rather than throughput: does the run notice that the brief and the repository disagree,
+does it weigh the *enforced* sources (CI, consumers, ADR) above the ticket, does it fix the right side, and
+does its docs pass leave the records alone when they were right? `report.py` prints per run whether the
+final message mentions the contradiction, which records were touched, whether `docs/reporting.md` was
+rewritten the wrong way, whether the ADR was touched, what CI now asserts, and whether `ReportService`
+filters cancelled orders. A T9 run that scores 4/4 on HTTP but rewrote ADR-0003 has failed the class.
 
 The task classes and the tier each one *should* cost are in `tasks/tasks.json`; `report.py` prints the
 tier the plugin arm actually ran next to the expected one, so a mis-sized route is visible per task.

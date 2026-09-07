@@ -129,5 +129,6 @@ Dispatch order — stop at the first match:
 | Review of a design decision, spec or ADR set | `design-reviewer` |
 | One plan task implemented by hand | `dotnet-implementer` |
 | Verifying whether a review finding is real | `findings-verifier` |
+| The brief, spec or plan says one thing and the code, a test, CI, an ADR, a doc or a consumer note says another | `evidence-reconciler` — before anyone changes the contested behaviour; a `code` verdict sends the brief back to its author |
 
 Agents cannot dispatch each other; each ends with a **Hand-offs** section and you act on it.

@@ -122,6 +122,13 @@ announces it in one line, and escalates on evidence — one tier up, never two. 
 | `standard` | a feature inside one service | brainstorm → plan → one plan review → `dotnet-sdd`: per-task review, verified findings, bounded fix loop, final review | ≈ $18–25 |
 | `deep` | two or more projects, a store or migration, an external contract, new infrastructure | `architecture-design` first (`scope: 'compact'` unless it really spans services), then `standard` | + $15–40 |
 
+When a brief says one thing and the repository another — the code, a test, a CI assertion, an ADR, a
+doc, a comment, a consumer note — nobody picks a side: the implementer stops with the contradiction,
+`evidence-reconciler` weighs every source (executed > decided > descriptive > intent, independence and
+recency break ties) and returns `brief`, `code` or `undecided` with an evidence table. `brief` fixes the
+code at the root; `code` or `undecided` returns `status: 'contradiction'` and the user rules (`args.truth`).
+`docs-sync` and `plan-reviewer` treat a record that disagrees with a diff as *contested*, never as stale.
+
 A review finding that describes a reproducible failure is a `defect`, and a `defect` is never below
 `important` however soft the section it was written in; the verifier may raise a severity it can
 reproduce, and a minor defect rides along with the next fix round instead of being deferred for ever.
@@ -150,7 +157,7 @@ updating the plugin.
 
 ## Agents
 
-Workflow agents: `dotnet-implementer`, `findings-verifier`, `code-reviewer`, `plan-reviewer`, `design-reviewer`, `tests-writer`, `debugger`, `design-simplicity`, `design-scalability`, `design-boundaries`, `design-judge`.
+Workflow agents: `dotnet-implementer`, `findings-verifier`, `code-reviewer`, `plan-reviewer`, `design-reviewer`, `tests-writer`, `debugger`, `evidence-reconciler`, `design-simplicity`, `design-scalability`, `design-boundaries`, `design-judge`.
 Specialists: `dotnet-architect`, `api-designer`, `grpc-contracts`, `ef-core-specialist`, `postgres-specialist`, `tsql-specialist`, `migration-reviewer`, `security-auditor`, `performance-analyst`, `concurrency-specialist`, `devops-engineer`, `build-error-resolver`, `refactor-cleaner`, `test-quality-auditor`, `docs-sync`.
 All resolve as `agentic-sdd-flow:<name>` and none can dispatch other agents. Specialists end with a Hand-offs section using the keys listed under *Company overlay*; workflow agents return JSON instead.
 

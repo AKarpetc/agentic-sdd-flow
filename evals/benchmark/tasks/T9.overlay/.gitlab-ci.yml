@@ -1,0 +1,14 @@
+stages: [build, test, smoke]
+
+build:
+  stage: build
+  script: [dotnet build Orders.slnx -c Release]
+
+test:
+  stage: test
+  script: [dotnet test Orders.slnx -c Release --no-build]
+
+smoke-report:
+  stage: smoke
+  # ADR-0003 guard: the seeded customer 1 has four orders, one of them cancelled; all four count.
+  script: [scripts/smoke-report.sh 1 "4 orders"]
