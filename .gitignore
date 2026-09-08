@@ -7,7 +7,7 @@ evals/fixtures/**/bin/
 evals/fixtures/**/obj/
 evals/benchmark/fixture/**/bin/
 evals/benchmark/fixture/**/obj/
-results/**/T?-*/
+results/**/T[0-9]*-*/
 # Routing-eval workspaces: a git repo per case, named after the case.
 results/**/*-routing/*/
 # Session streams: 38 MB for one suite, and every number the report needs is already in the .json outcome.

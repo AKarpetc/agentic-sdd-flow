@@ -1,6 +1,8 @@
 # Tuning backlog — what to change next, and how to know it worked
 
-Written after the [2026-09-07 measurement](benchmark-2026-09-07-results.md) of 0.2.8. Every item names the
+Written after the [2026-09-07 measurement](benchmark-2026-09-07-results.md) of 0.2.8, and updated by the
+[2026-09-08 overnight run](benchmark-2026-09-08-results.md), which answered items 1, 4 and 5 and produced
+six fixes. Items still open are 2, 3, 6 and the two follow-ups the answers created. Every item names the
 evidence that motivates it, the change, and the number that decides whether it worked. Ordered by expected
 value ÷ effort. Nothing here is speculative: each one has a measurement behind it or a measurement in front
 of it.
@@ -24,7 +26,17 @@ python3 evals/benchmark/run.py --task T11 --out results/bench-<date>-deep --work
 python3 evals/routing/run.py --case deep-sizing-platform --model claude-opus-5
 ```
 
-## 1. Repetition, before anything else (P0)
+## 1. Repetition — ANSWERED 2026-09-08: the gate is unstable at the small end (P0, now a rubric fix)
+
+**Measured.** Three runs of the identical T1 brief routed `quick`, `light`, `mix` — 4/4 every time, but
+$3.01 / $9.61 / $6.12 and 4.3 / 19.5 / 9.6 minutes. T6 was stable (`mix`, `mix`, 10/10 both). The baseline
+was `quick`-equivalent three times out of three at $2.32–$2.69.
+
+**Change (open).** Sharpen the `quick` / `light` / `mix` boundary in `skills/dotnet-feature/references/sizing.md`
+with a question that does not move run to run — the blast-radius count is what wobbled (4 files read as
+"1–2 plus tests" once and "several" twice). **Decides it:** `--repeat 3` on T1 again; three identical routes.
+
+## 1b. The original framing (kept for the record)
 
 **Evidence.** Every conclusion in the results document rests on one session per cell. The gate picked
 `quick` for T1 and `mix` for T6, T7, T8, T9 — consistently, but five samples of a judgement is not a
@@ -51,6 +63,11 @@ cap with 36 agents; `plan-reviewer` ran twice for 12.3 minutes before the workfl
 **Decides it.** `--force-tier standard` on T6, against the recorded $31.51 / 73.4 min / 26 agents. Target:
 under $20 and under 40 minutes with the same 10/10 and the same defects found.
 
+**Re-measured 2026-09-08, before any change: $34.70 / 82.1 min / 23 agents, 10/10, +0 violations** — the
+same shape as 2026-09-07, so the target is untouched and the change is still to be made. The same night's
+`mix` runs of T6 delivered the identical 10/10 for $13.84 and $11.76 in 23.5 and 22.0 minutes, which is the
+number `standard` has to justify against.
+
 ## 3. The context-sharing machinery is unexercised (P1)
 
 **Evidence.** The pack, the PreToolUse gate, the journal and `dependsOn` inheritance are built, tested and
@@ -70,7 +87,20 @@ produced. The journal did work: the two reviewers on T6 wrote their lines.
 **Decides it.** Agent tool counts against the recorded 26-agent run (≈11 per agent on the `mix` run,
 unknown for `standard` post-change), and the pack-gate log above.
 
-## 4. Does FTS5 recall suffice, or are embeddings warranted (P1)
+## 4. FTS5 recall — ANSWERED 2026-09-08: it does not reach the paraphrased record (P0)
+
+**Measured.** T10, both arms **1/4**, both ruling for the ticket against the code, both flipping the CI
+guard to `"3 orders"` and editing ADR-0007/0008. The plugin dispatched `evidence-reconciler` (2.4 min) and
+named the contradiction in its final message — and still ruled the wrong way, for $25.22 against $4.47.
+The failure is recall, not judgement: queried in the brief's words the decisive ADR is out of reach, so the
+reconciler weighs only the records the brief's vocabulary already matches.
+
+**Change (open), in this order:** raise `-n` from 10 to 20 (free); make the reconciler query a third time in
+the *records'* vocabulary taken from the top hit's own words (free); only then the embedding backend from
+[vector-store-evaluation.md](vector-store-evaluation.md) §4. **Decides it:** T10 acceptance 4/4 with
+`adrTouched: false` and the CI guard intact.
+
+## 4b. The original framing (kept for the record)
 
 **Evidence.** T10 exists for exactly this: the records state the rule in vocabulary the brief never uses
 (statement lines, reversals, payer, parity — against orders, cancelled, customer). Queried in the brief's
@@ -85,7 +115,19 @@ is sufficient and the vector question is closed for now. If it rules `brief`, tr
 
 **Decides it.** T10's acceptance and `adrTouched` / `ciSmokeExpects` quality signals.
 
-## 5. `deep` has never run — the fixture now exists (P1, was P2)
+## 5. `deep` — RUN 2026-09-08: killed at the cap with 4/15, six fixes made (P0)
+
+**Measured.** The gate answered `deep` correctly, then the pipeline spent 147 of 180 minutes before
+`dotnet-sdd` started: a merge agent merging one document into itself, a 21-minute replay caused by editing
+the brief between the two design calls, 22 ADRs, and three rounds of plan review where the skill allows
+two. Bare superpowers delivered the same feature 15/15 in 98.7 minutes for $34.39. Full write-up and the
+list of fixes: [benchmark-2026-09-08-results.md](benchmark-2026-09-08-results.md).
+
+**Change (done).** `priorRun` makes the approval pass record-only; the context merge is skipped for a single
+document; ADRs are capped with an explicit bar; plan review is capped at two dispatches. **Decides it:**
+T11 both arms again under the same 180-minute cap — the design phase must end before minute 90.
+
+## 5b. The fixture (kept for the record)
 
 **Evidence.** No cell exercised the design pipeline: the single-solution fixture has no data store and no
 external contract, so nothing in it can honestly demand one. `scope: 'compact'` is therefore untested too.

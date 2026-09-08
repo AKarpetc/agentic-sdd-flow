@@ -144,10 +144,15 @@ a finished branch instead of three per plan task.
 2. **Plan** — invoke `superpowers:writing-plans`. Save the plan as `<plansDir>/<YYYY-MM-DD>-<TASK-KEY>.md`
    (`plansDir` from config, default `temp/plans/`, resolved from the repository root — never inside the
    target project's tracked tree). When the skill offers its **Execution Handoff** menu, do not show it.
-3. **Plan review — once, not twice.** Dispatch `agentic-sdd-flow:plan-reviewer` with the plan path and the
-   spec path; apply every critical and important finding to the plan yourself and dispatch the reviewer once
-   more (it verdicts the prior ids first). When it approves, pass `skipPlanReview: true` to the workflow —
-   the workflow's own Plan review phase would otherwise review the same plan a second time.
+3. **Plan review — at most twice, and the second one is the last.** Dispatch
+   `agentic-sdd-flow:plan-reviewer` with the plan path and the spec path; apply every critical and important
+   finding to the plan yourself and dispatch the reviewer once more (it verdicts the prior ids first).
+   🔴 **Do not dispatch a third time.** If the second pass still returns findings, apply them and execute —
+   only an unresolved `critical` (a task that cannot be implemented as written) buys one more round, and
+   then you say so in one line. A third round bought nothing measurable and cost 20 minutes of reviewer time
+   on the 2026-09-08 deep run, on a plan whose implementation was then cut short by the budget.
+   When it approves, pass `skipPlanReview: true` to the workflow — the workflow's own Plan review phase
+   would otherwise review the same plan a second time.
 4. `Workflow({ name: 'agentic-sdd-flow:dotnet-sdd', args: { project, projectDir, plan, taskKey, spec, skipPlanReview: true } })`.
    (This skill's instructions are the user's opt-in for the Workflow tool.) If the runtime reports the name
    as unknown, the plugin was installed during this session — ask the user to restart Claude Code, then retry.
@@ -172,11 +177,16 @@ a finished branch instead of three per plan task.
    `threats` with `critical`/`important` severity, `data.findings`, and `unanswered` drivers, and the
    paths of the proposal files whose mermaid sketches show each design. Ask
    which proposal to approve (or what to change). **Stop until the user answers.**
-6. Second run: the same call plus `approvedProposalId` and `resumeFromRunId` from the first run.
-   It writes the ADRs and the spec; then continue with brainstorming's steps 7–8 (spec self-review,
-   user reviews the spec) on `specPath`. Always pass `resumeFromRunId`; if the second run's
-   `decision.winnerId` differs from the id you approved, stop and show both — do not write ADRs from a
-   different decision table.
+6. Second run — a **record** pass, not a replay: the same call plus `approvedProposalId`, `resumeFromRunId`
+   from the first run, and 🔴 **`priorRun`: the whole result object the first run returned**. With `priorRun`
+   the workflow skips phases 1–7 and goes straight to the ADRs and the spec. Without it the panel runs again,
+   and the resume cache only saves you while every prompt is byte-identical — so the moment you improve the
+   brief in answer to the design review, the cache misses and the whole pipeline replays (measured
+   2026-09-08: 21 minutes, aborted by hand). **Never edit the brief between the two calls** — corrections to
+   the design go into the record pass as part of `priorRun.designReview`, or into the spec fix pass.
+   Then continue with brainstorming's steps 7–8 (spec self-review, user reviews the spec) on `specPath`.
+   If the second run's `decision.winnerId` differs from the id you approved, stop and show both — do not
+   write ADRs from a different decision table.
 7. Continue at step 3s with that spec (plan → one plan review → the workflow).
 
 ## 4. Resuming a workflow

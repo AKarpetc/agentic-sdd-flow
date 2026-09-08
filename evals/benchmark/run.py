@@ -15,6 +15,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -25,6 +26,29 @@ ACCEPTANCE = os.path.join(HERE, "acceptance.py")
 MANIFEST = json.load(open(os.path.join(TASKS, "tasks.json"), encoding="utf-8"))
 FIXTURES = json.load(open(os.path.join(HERE, "fixtures.json"), encoding="utf-8"))
 PORT_STRIDE = 8  # one block of ports per concurrent cell: the platform fixture needs one per service
+
+
+def free_port_blocks(base, count, stride=PORT_STRIDE):
+    """`count` blocks of `stride` ports from `base` upwards, skipping any block that already has a listener.
+
+    Docker's RabbitMQ sits on 5672; the 2026-09-08 run handed that port to a cell, the acceptance client
+    got `BadStatusLine: AMQP` from it and the whole cell scored as an error. A port that answers before we
+    start anything is never ours."""
+    def busy(port):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.settimeout(0.3)
+            return probe.connect_ex(("127.0.0.1", port)) == 0
+
+    blocks, port = [], base
+    while len(blocks) < count and port < base + stride * (count + 40):
+        if not any(busy(port + offset) for offset in range(stride)):
+            blocks.append(port)
+        else:
+            print("port block %d-%d is in use — skipping it" % (port, port + stride - 1), flush=True)
+        port += stride
+    while len(blocks) < count:  # nothing free in range: fall back to the naive layout rather than not running
+        blocks.append(base + stride * len(blocks))
+    return blocks
 KEYS = {task: meta["key"] for task, meta in MANIFEST.items()}
 TOOLS = ["Bash", "Read", "Write", "Edit", "MultiEdit", "Glob", "Grep", "Agent", "Skill", "Workflow", "TodoWrite", "TaskOutput", "Monitor"]
 
@@ -175,12 +199,16 @@ def parse_stream(stream_path):
         except (ValueError, KeyError):
             continue
     result, top_calls, nested_calls, dispatches, final_text = {}, {}, {}, [], ""
+    message_usage = {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
     segments = []  # one `result` event per time the model yielded; the session resumes when a background task reports
     agents = {}  # tool_use_id -> {type, description, start, last, tools}
     for t, ev in events:
         kind = ev.get("type")
         if kind == "assistant":
             parent = ev.get("parent_tool_use_id")
+            for field, value in (ev.get("message", {}).get("usage") or {}).items():
+                if field in message_usage and isinstance(value, int):
+                    message_usage[field] += value
             for block in ev.get("message", {}).get("content", []):
                 if block.get("type") == "tool_use":
                     name = block["name"]
@@ -204,6 +232,8 @@ def parse_stream(stream_path):
             result = ev
             segments.append(ev.get("num_turns") or 0)
     usage = result.get("usage", {})
+    if not result:  # killed before it yielded: sum what the assistant events carry, and say so
+        usage = dict(message_usage, estimated=True)
     status = re.search(r"STATUS:\s*(\w+)", final_text)
     return {
         "subtype": result.get("subtype"), "turns": sum(segments) or result.get("num_turns"), "segments": len(segments),
@@ -295,9 +325,10 @@ def main():
     ordered = sorted(set(tasks), key=lambda t: list(MANIFEST).index(t) if t in MANIFEST else 99)
     selected = [(t, a, r) for t in ordered for a in (args.arm or list(arms)) for r in range(1, max(1, args.repeat) + 1)]
     os.makedirs(args.out, exist_ok=True)
+    ports = free_port_blocks(args.port_base, len(selected))
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = [pool.submit(run_pair, t, a, arms[a], args.out, args.timeout, args.max_turns,
-                               args.port_base + i * PORT_STRIDE, args.model, r, args.force_tier)
+                               ports[i], args.model, r, args.force_tier)
                    for i, (t, a, r) in enumerate(selected)]
         for future in concurrent.futures.as_completed(futures):
             try:

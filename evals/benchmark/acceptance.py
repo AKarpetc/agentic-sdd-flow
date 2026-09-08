@@ -11,6 +11,7 @@ peers are through Services__<Name>__BaseUrl.
 
 import argparse
 import glob
+import http.client
 import json
 import os
 import re
@@ -87,11 +88,19 @@ def http(method, url, body=None):
             return error.code, raw
     except (urllib.error.URLError, socket.timeout, ConnectionError) as error:
         return 0, str(error)
+    except http.client.HTTPException as error:  # something is listening but does not speak HTTP
+        return 0, "%s: %s" % (type(error).__name__, error)
 
 
 def base_urls(fixture, port):
     """One base URL per service of the fixture, from --port upwards in the order fixtures.json lists them."""
     return {service["name"]: "http://127.0.0.1:%d" % (port + service["offset"]) for service in fixture["services"]}
+
+
+def port_is_free(port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(0.5)
+        return probe.connect_ex(("127.0.0.1", port)) != 0
 
 
 def run_services(workspace, fixture, port):
@@ -102,6 +111,9 @@ def run_services(workspace, fixture, port):
     injected as Services__<Name>__BaseUrl, so a fixture never depends on the ports in its appsettings.json.
     """
     bases = base_urls(fixture, port)
+    taken = [name for name, url in bases.items() if not port_is_free(int(url.rsplit(":", 1)[1]))]
+    if taken:  # somebody else owns the port; whatever answers there is not the service under test
+        return None, dict(bases, error="ports already in use: %s" % ", ".join("%s=%s" % (n, bases[n]) for n in taken))
     env = dict(ENV, **{"Services__%s__BaseUrl" % name: url for name, url in bases.items()})
     procs = []
     for service in fixture["services"]:
@@ -112,7 +124,8 @@ def run_services(workspace, fixture, port):
     waiting = list(zip(fixture["services"], procs))
     while waiting and time.time() < deadline:
         service, proc = waiting[0]
-        if http("GET", bases[service["name"]] + "/")[0] != 0:
+        status, _ = http("GET", bases[service["name"]] + "/")
+        if 200 <= status < 500:  # a real HTTP answer, not merely a socket that accepted
             waiting.pop(0)
             continue
         if proc.poll() is not None:
@@ -572,7 +585,8 @@ def main():
     if result["build"]["ok"]:
         procs, bases = run_services(args.workspace, fixture, args.port)
         if procs is None:
-            checks = [{"name": "the services start", "ok": False, "detail": "one of %s did not answer within the deadline" % list(bases)}]
+            detail = bases.get("error") or "one of %s did not answer within the deadline" % [k for k in bases if k != "error"]
+            checks = [{"name": "the services start", "ok": False, "detail": detail}]
         else:
             try:
                 checks = ACCEPTANCE[args.task](bases if multi else bases[entry])
