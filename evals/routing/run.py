@@ -50,7 +50,11 @@ def run_case(case, defaults, fixture, root, model, timeout):
                "--allowedTools", *allowed]
     if model:
         command += ["--model", model]
+    # Same isolation as the benchmark: these cases exist to watch the sizing gate decide, so the host
+    # repository's config — its overlay and above all its routing policy — must not reach the session.
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    env["CLAUDE_PROJECT_DIR"] = os.path.abspath(workspace)
+    env["ASF_ROUTING_POLICY"] = "off"
     started = time.time()
     stream_path = os.path.join(root, case["name"] + ".stream.jsonl")
     timed_out = False

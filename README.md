@@ -204,7 +204,13 @@ Everything specific to your systems lives in your repository, not in the plugin:
 the gate may choose on its own — above it the user has to say so. Both are injected as a
 `<routing-policy>` block into the session and into every plan-driven prompt. It is a routing policy, not a
 rules exemption: the conventions, the Write/Edit gate and the mandatory routes (review, test authoring,
-contradiction) hold at every tier. Leave it out and the gate decides as before.
+contradiction) hold at every tier, and **dispatching one specialist agent for the job it owns is not a
+route change** — the ceiling is about who runs the whole ticket. Leave the key out and the gate decides as
+before.
+
+`ASF_ROUTING_POLICY=off` in the environment ignores the block wherever it is set. Both eval harnesses set
+it (together with `CLAUDE_PROJECT_DIR`, so a workspace cannot inherit the host repository's config at all):
+they exist to measure the sizing gate, and a policy that decides for it would measure nothing.
 
 Hand-off keys the plugin's agents use (map the ones you have; unmapped keys are reported in plain words):
 

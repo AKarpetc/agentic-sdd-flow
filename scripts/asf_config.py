@@ -60,6 +60,8 @@ def routing_policy(cfg):
     `default` is the route to take when nothing in the brief demands more; `maxAutoTier` is the highest
     route the sizing gate may pick on its own — above it the user has to say so. Unknown tier names are
     dropped rather than guessed, so a typo turns the policy off instead of silently routing somewhere."""
+    if str(os.environ.get("ASF_ROUTING_POLICY", "")).strip().lower() in ("off", "0", "ignore", "none"):
+        return {}  # the plugin's own evals measure the sizing gate; a host policy would decide for it
     raw = cfg.get("routing")
     if not isinstance(raw, dict):
         return {}

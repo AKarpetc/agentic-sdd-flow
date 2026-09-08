@@ -139,11 +139,22 @@ def routing_block():
                      "(`--tier <name>`, or them asking for it in as many words); when you believe one is "
                      "warranted, say so in one line with what it would buy and continue at the ceiling until "
                      "they answer." % ceiling)
+    lines.append("**One specialist agent is not a route change.** The ceiling is about who runs the *whole "
+                 "ticket*, not about never dispatching an agent: when the work plainly needs one, or the user "
+                 "asks for it, hand that one job to the agent that owns it and keep the rest here — "
+                 "`agentic-sdd-flow:tests-writer` for .NET tests, `agentic-sdd-flow:code-reviewer` or "
+                 "`/agentic-sdd-flow:dotnet-code-review` for a review, the `architecture-design` workflow or "
+                 "`agentic-sdd-flow:dotnet-architect` for a design question, `agentic-sdd-flow:debugger` for a "
+                 "root cause, `agentic-sdd-flow:evidence-reconciler` for a contradiction. What the ceiling "
+                 "forbids is handing the ticket to a plan-driven workflow and buying its whole agent chain "
+                 "unasked.")
     lines.append("This is a routing policy, not a rules exemption: the conventions above still hold, the "
                  "Write/Edit gate still runs, and the mandatory routes still apply — .NET code review goes to "
                  "`/agentic-sdd-flow:dotnet-code-review`, .NET test authoring to `agentic-sdd-flow:tests-writer`, "
                  "and a brief that contradicts the repository to `agentic-sdd-flow:evidence-reconciler` — "
                  "whatever the route.")
+    lines.append("The plugin's own evals ignore this block entirely (`ASF_ROUTING_POLICY=off`): they exist to "
+                 "measure the sizing gate, and a policy that decides for it would measure nothing.")
     if policy.get("note"):
         lines.append(policy["note"])
     lines.append("</routing-policy>")

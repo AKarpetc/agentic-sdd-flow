@@ -90,15 +90,24 @@ def prepare_workspace(root, name, task, overlay=None):
     return workspace
 
 
-def session_env():
-    """Environment for a headless session: not nested in a Claude Code session, and no idle ceiling on background work.
+def session_env(workspace):
+    """Environment for a headless session: not nested in a Claude Code session, no idle ceiling on background
+    work, and pinned to the workspace so the host repository's configuration cannot reach it.
 
     `claude -p` keeps running while a background Workflow or Agent is alive, but by default gives up after
     10 minutes of "idle waiting" (CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS) and aborts the work — the plugin arm's
     dotnet-sdd workflow was killed mid-agent that way. The runner's own --timeout still bounds the session.
+
+    The two isolation variables matter as much: `find_project_root` walks *up* from the workspace, and these
+    workspaces live inside a checkout that itself lives inside a repository with a plugin config — so without
+    `CLAUDE_PROJECT_DIR` a session would inherit that repository's `checks`, its overlay contract and its
+    routing policy. `ASF_ROUTING_POLICY=off` then says it outright: a benchmark measures the sizing gate, so
+    nothing may decide the route for it. Both arms get the same environment.
     """
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
     env.setdefault("CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS", "0")
+    env["CLAUDE_PROJECT_DIR"] = os.path.abspath(workspace)
+    env["ASF_ROUTING_POLICY"] = "off"
     return env
 
 
@@ -122,7 +131,7 @@ def session_command(arm, max_turns, model=None):
 
 def run_session(prompt, workspace, arm, stream_path, timeout, max_turns, model=None):
     command = session_command(arm, max_turns, model)
-    env = session_env()
+    env = session_env(workspace)
     started = time.time()
     timed_out = False
     with open(stream_path, "w", encoding="utf-8") as stream, open(stream_path + ".stderr", "w", encoding="utf-8") as errors:

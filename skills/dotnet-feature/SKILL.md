@@ -63,7 +63,10 @@ Rules for the proposal:
   on your own judgement — recommend the higher route in one line, say what it would buy, and continue at
   the ceiling until the user answers. The policy never suspends a mandatory route (review →
   `dotnet-code-review`, test authoring → `tests-writer`, contradiction → `evidence-reconciler`) and never
-  suspends the rules.
+  suspends the rules. **It does not forbid agents, only routes**: handing one job to the agent that owns it
+  — `tests-writer`, `code-reviewer`, `dotnet-architect` or the `architecture-design` workflow for a design
+  question, `debugger` for a root cause — is allowed at any tier when the work needs it; what the ceiling
+  stops is buying a plan-driven workflow's whole agent chain for the ticket unasked.
 - **The user's answer wins**, including "just do it" (→ A) and `--tier quick|light|standard|deep` (→ that route).
 - **Non-interactive or headless run** (no human to answer, a benchmark, a `-p` session): take the
   recommendation, state it in one line, continue. Never block on the menu.

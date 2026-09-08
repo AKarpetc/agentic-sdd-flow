@@ -218,3 +218,9 @@ plans for hygiene rather than substance, sessions that hit `--max-turns` before 
   before drawing a conclusion; report.py aggregates whatever directories it is given.
 - Both arms share the same model, the same machine and the same user-scope MCP servers; the only
   difference is the plugin and the process line.
+- 🔴 **Sessions are pinned to their workspace** (`CLAUDE_PROJECT_DIR`) and run with `ASF_ROUTING_POLICY=off`.
+  Without the first, `find_project_root` walks up out of the workspace into whatever repository the checkout
+  happens to live in and the session inherits its `checks`, its overlay contract and its routing policy;
+  without the second, a host that pins its default route would decide the very thing the benchmark measures.
+  Runs made before 2026-09-08 did inherit the host overlay, so their per-agent context was slightly larger
+  than a run made today — the difference is small but they are not byte-comparable.
