@@ -15,6 +15,7 @@ DEFAULTS = {
     "docsPaths": ["docs", "CLAUDE.md"],
     "projects": {},
     "checks": {},
+    "routing": {},  # {"default": quick|mix|light|standard|deep, "maxAutoTier": ...} — see routing_policy()
     "handoffs": {},
     "overlayContract": DEFAULT_OVERLAY_REL,
 }
@@ -48,6 +49,28 @@ def find_project_root(start=None):
     except (OSError, subprocess.SubprocessError):
         pass
     return current
+
+
+TIERS = ["quick", "mix", "light", "standard", "deep"]
+
+
+def routing_policy(cfg):
+    """The repository's routing preference, normalised: {"default": <tier>, "maxAutoTier": <tier>}.
+
+    `default` is the route to take when nothing in the brief demands more; `maxAutoTier` is the highest
+    route the sizing gate may pick on its own — above it the user has to say so. Unknown tier names are
+    dropped rather than guessed, so a typo turns the policy off instead of silently routing somewhere."""
+    raw = cfg.get("routing")
+    if not isinstance(raw, dict):
+        return {}
+    policy = {}
+    for key in ("default", "maxAutoTier"):
+        value = str(raw.get(key, "")).strip().lower()
+        if value in TIERS:
+            policy[key] = value
+    if isinstance(raw.get("note"), str) and raw["note"].strip():
+        policy["note"] = raw["note"].strip()
+    return policy
 
 
 def load_config(root):

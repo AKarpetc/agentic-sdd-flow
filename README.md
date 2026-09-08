@@ -188,7 +188,23 @@ Everything specific to your systems lives in your repository, not in the plugin:
 - `.claude/rules/OVERLAY-CONTRACT.md` — injected after the plugin contract.
 - `.claude/agentic-sdd-flow.json` — `taskKeyPattern`, `plansDir`, `adrDir`, `docsPaths`,
   `projects` (name → solution), `checks` (`block|advisory|off` per id), `handoffs` (key → your
-  skill or agent), `overlayContract`.
+  skill or agent), `overlayContract`, `routing`.
+
+`routing` is how a repository that has measured its own flows keeps the sizing gate on a leash:
+
+```json
+"routing": {
+  "default": "quick",
+  "maxAutoTier": "mix",
+  "note": "Optional line appended to the injected policy — say why."
+}
+```
+
+`default` is the route to take when nothing in the brief demands more; `maxAutoTier` is the highest route
+the gate may choose on its own — above it the user has to say so. Both are injected as a
+`<routing-policy>` block into the session and into every plan-driven prompt. It is a routing policy, not a
+rules exemption: the conventions, the Write/Edit gate and the mandatory routes (review, test authoring,
+contradiction) hold at every tier. Leave it out and the gate decides as before.
 
 Hand-off keys the plugin's agents use (map the ones you have; unmapped keys are reported in plain words):
 

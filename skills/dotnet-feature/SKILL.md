@@ -57,6 +57,13 @@ difference between A and C was cost only — same files, same tests. Say B or C 
 
 Rules for the proposal:
 
+- 🔴 **A repository's routing policy outranks the table.** `routing` in `.claude/agentic-sdd-flow.json`
+  (`default`, `maxAutoTier`) is injected into your context as a `<routing-policy>` block. Where it is set,
+  `default` is what you take unless the brief demands more, and you **never** route above `maxAutoTier`
+  on your own judgement — recommend the higher route in one line, say what it would buy, and continue at
+  the ceiling until the user answers. The policy never suspends a mandatory route (review →
+  `dotnet-code-review`, test authoring → `tests-writer`, contradiction → `evidence-reconciler`) and never
+  suspends the rules.
 - **The user's answer wins**, including "just do it" (→ A) and `--tier quick|light|standard|deep` (→ that route).
 - **Non-interactive or headless run** (no human to answer, a benchmark, a `-p` session): take the
   recommendation, state it in one line, continue. Never block on the menu.

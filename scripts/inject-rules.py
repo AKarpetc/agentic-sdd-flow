@@ -92,7 +92,7 @@ You are the controller. Two obligations that only you can meet:
 2. Treat a violation found in review as an Important finding — it enters the fix loop.
 
 {contract}
-{overlay}
+{overlay}{routing}
 </rules-contract>"""
 
 SESSION_HEADER = """\
@@ -103,13 +103,51 @@ these absolute paths, never search the filesystem for them.
 Entry point for feature work: /agentic-sdd-flow:dotnet-feature <TASK-KEY> <description>.
 {navigator}
 {contract}
-{overlay}
+{overlay}{routing}
 </rules-contract>"""
 
 
 def read(path):
     with open(path, encoding="utf-8") as handle:
         return handle.read()
+
+
+ROUTE_MEANING = {
+    "quick": "the superpowers flow in this session (brainstorming → test-driven-development), no plugin agent",
+    "mix": "superpowers writes it, then `dotnet-sdd` in `mode: 'review'` gates the branch",
+    "light": "a short plan, then `dotnet-sdd` in `mode: 'light'`",
+    "standard": "brainstorm → plan → one plan review → `dotnet-sdd`",
+    "deep": "`architecture-design` first, then `standard`",
+}
+
+
+def routing_block():
+    """The repository's routing preference, stated as policy the session has to follow.
+
+    A repository that has measured its own flows may not want the sizing gate free to pick the expensive
+    routes on its own; `routing` in .claude/agentic-sdd-flow.json is where it says so."""
+    policy = asf_config.routing_policy(asf_config.load_config(asf_config.find_project_root()))
+    if not policy:
+        return ""
+    lines = ["", "<routing-policy source=\".claude/agentic-sdd-flow.json\" enforcement=\"mandatory\">"]
+    default = policy.get("default")
+    ceiling = policy.get("maxAutoTier")
+    if default:
+        lines.append("Default route for feature work in this repository: **%s** — %s." % (default, ROUTE_MEANING.get(default, default)))
+    if ceiling:
+        lines.append("🔴 Never route above **%s** on your own judgement. A higher route needs the user's word "
+                     "(`--tier <name>`, or them asking for it in as many words); when you believe one is "
+                     "warranted, say so in one line with what it would buy and continue at the ceiling until "
+                     "they answer." % ceiling)
+    lines.append("This is a routing policy, not a rules exemption: the conventions above still hold, the "
+                 "Write/Edit gate still runs, and the mandatory routes still apply — .NET code review goes to "
+                 "`/agentic-sdd-flow:dotnet-code-review`, .NET test authoring to `agentic-sdd-flow:tests-writer`, "
+                 "and a brief that contradicts the repository to `agentic-sdd-flow:evidence-reconciler` — "
+                 "whatever the route.")
+    if policy.get("note"):
+        lines.append(policy["note"])
+    lines.append("</routing-policy>")
+    return "\n".join(lines)
 
 
 def overlay_block():
@@ -147,6 +185,7 @@ def main():
         return 0
     rules_dir = os.path.join(PLUGIN_ROOT, "rules")
     fields = {"rules_dir": rules_dir, "contract": read(CONTRACT), "overlay": overlay_block(),
+              "routing": routing_block(),
               "roslyn": ROSLYN_ACCESS.format(bin_dir=os.path.join(PLUGIN_ROOT, "bin")),
               "navigator": navigator_note(), "plugin_root": PLUGIN_ROOT, "budget": WORKING_BUDGET}
 
