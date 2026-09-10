@@ -58,9 +58,21 @@ Because the runner binds per review, "reviewed against the wrong solution" is no
    - **Where [common.md](../../rules/common.md) contradicts `code-convention.md`** (primary constructors, `IOptions<T>`), `code-convention.md` wins — see [kit-overrides.md](../../rules/kit-overrides.md).
    - **Zero rule findings is a claim that needs evidence.** On a non-trivial diff it usually means the checklist was skimmed, not that the code is perfect. Re-run the Step 5.5 sweep before asserting it.
 
+7. 🔴 **Two passes, not one — and the second one starts over.** Step 5.5 answers *does this file obey the
+   rules*; Step 6 answers *does this change behave correctly once deployed, against real data, next to the
+   code it did not touch*. Different questions, different reading: the first is per file, the second is
+   across files and across releases. Running them as one continuous read is how a review returns ten
+   convention findings and misses the migration that cannot replay. Keep them separate, and give the
+   second one [references/deep-analysis-checklist.md](references/deep-analysis-checklist.md).
+8. **Evidence over coverage.** Never assert a fact you cannot verify from the diff, the repository or
+   `git` — library version histories, framework behaviour you are inferring, "this changed in version X".
+   Verify it with a tool or drop the finding. Check every finding against the task's stated intent before
+   raising it: a great many "warnings" flag exactly the change the ticket asked for. A confident false
+   statement costs more trust than a missed minor issue.
+
 ## Review Criteria
 
-Analyze meticulously against all eight dimensions. Dimension 0 is a mandatory gate — the other seven are expert judgement, dimension 0 is a checklist that is either completed or the review is incomplete.
+Analyze meticulously against all nine dimensions. Dimension 0 is a mandatory gate — the other eight are expert judgement, dimension 0 is a checklist that is either completed or the review is incomplete.
 
 0. 🔴 **Convention Compliance (mandatory, non-negotiable)** — every changed `.cs` file against [code-convention.md](../../rules/code-convention.md) + [single-type-per-file.md](../../rules/single-type-per-file.md); every changed **test** file additionally against [test-convention.md](../../rules/test-convention.md). Walk [references/rule-compliance-checklist.md](references/rule-compliance-checklist.md) — access modifiers, no primary ctors on DI classes, mandatory `CancellationToken`, `Result<T>` over exceptions, gRPC contract shape, no `IOptions<T>`, feature flags off by default, **no inline comments — XML doc only**, `{ get; init; }` on new properties, `.editorconfig`, one type per file with a matching filename, and for tests: xUnit + NSubstitute + FluentAssertions **7.2.0**, `{Action}_When_{Condition}_Should_{Expected}`, AAA with a single-line Act, `BeEquivalentTo`, no `Arg.Do`, no `_ = await`, `Result<T>` asserted before `.Value`.
 
@@ -68,9 +80,10 @@ Analyze meticulously against all eight dimensions. Dimension 0 is a mandatory ga
 2. **Architecture & Design Patterns** — missed opportunities for standard patterns (Factory, Strategy, Repository, Decorator, etc.); violations of service boundaries, layer direction, or domain encapsulation. Check CQRS/MediatR usage and thin controllers.
 3. **Software Engineering Principles** — SOLID, DRY, KISS, YAGNI. Point out God classes, leaky abstractions, duplication, over-engineering, and needless generality.
 4. **.NET/C# Best Practices** — idiomatic modern C# (C# 12+), correct `async/await` (no `.Result`/`.Wait()`, `CancellationToken` honored), memory/allocation awareness, LINQ correctness & performance, `Result<T>` pattern over flow-control exceptions, collection expressions, records for DTOs.
-5. **Performance, Security & Resilience** — bottlenecks, inefficient algorithms, N+1 queries, missing `.AsNoTracking()`/projections/pagination, thread-safety, input validation, authorization (`[Authorize]`), data/PII exposure, robust exception handling, secrets handling.
+5. **Performance, Security & Resilience** — bottlenecks, inefficient algorithms, N+1 queries, missing `.AsNoTracking()`/projections/pagination, unbounded fan-out (`Task.WhenAll` over a caller-sized collection), thread-safety, input validation, authorization (`[Authorize]`), IDOR, data/PII exposure, robust exception handling, secrets handling. → [deep-analysis-checklist.md](references/deep-analysis-checklist.md) D4–D5.
 6. **Tests & Quality Assurance** — beyond the dimension-0 checklist: edge-case coverage, meaningful assertions, absence of fragile/implementation-coupled tests, missing scenarios, tests that pass regardless of the behavior they claim to check.
 7. **Documentation** — XML docs on public APIs, accurate inline comments, alignment of external docs with actual logic. Flag outdated comments and missing docs.
+8. **Persistent state, caching & contracts** — a migration that must survive a replay, a partially applied `Up` and a rollout where both code versions run; a cache whose key is an access boundary and whose invalidation follows the commit; a contract change measured against the consumers that are not in this solution. None of these is visible in a single file, none is a compiler diagnostic, and each fails in production rather than in CI. → [deep-analysis-checklist.md](references/deep-analysis-checklist.md) D1–D3.
 
 ## Workflow
 
@@ -232,8 +245,38 @@ Use the grep sweep at the end of the checklist as a **cross-check, not a substit
 
 Before writing the output, state to yourself how many changed files you actually walked. If that number is lower than the changed-file count from Step 1, the sweep is incomplete — finish it.
 
-### Step 6 — Manual deep review
-Read the in-scope files for what neither the tools nor the rule sweep catch: business-logic correctness vs. docs, naming clarity, error-handling completeness, concurrency safety, security (validation, authz, data exposure), and documentation accuracy. Apply criteria 1–7.
+### Step 6 — 🔴 Deep pass (mandatory, separate from Step 5.5)
+
+Read the in-scope files for what neither the tools nor the rule sweep catch: business-logic correctness
+vs. docs, error-handling completeness, concurrency safety, security, documentation accuracy — and walk
+[references/deep-analysis-checklist.md](references/deep-analysis-checklist.md) **D1–D7**: migrations and
+persistent state, caching, contract compatibility, performance, deep security, domain borders, multi-file
+reasoning. Apply criteria 1–7.
+
+🔴 **This is a second pass, not a continuation of the first.** An agent that has just walked a file
+line-by-line for `IOptions<T>` and inline comments is anchored on surface shape; it reads the same diff
+again and finds the same class of thing. The deep questions — *will this migration replay*, *does this key
+cross a tenant*, *who calls the symbol whose signature moved* — are answered across files and across
+releases, and they need the reading to start over with that frame. So:
+
+- **Start the pass by naming the D-sections in scope for this diff** (a migration file pulls in D1, a
+  cache write D2, a contracts assembly D3, and D4/D5/D7 are always in scope). Write that list down before
+  reading, so the pass is scoped by the change and not by what caught your eye first.
+- **Do not re-raise a surface finding here.** Naming, async idiom, null safety, contract style,
+  `.editorconfig` and mechanical simplification were already reported by Step 5.5; repeating one costs a
+  slot and reads as padding.
+- **On a diff worth it — a migration, a cache path, a contract change, or more than ~10 changed files —
+  run the pass in its own context.** Dispatch `agentic-sdd-flow:code-reviewer` (or, in a workflow, a
+  general-purpose agent) with: the diff refs, the D-sections in scope, the deep-analysis checklist, and
+  the explicit instruction that the convention review is already done and must not be repeated. Merge its
+  findings into the sections below. A fresh context is what makes the pass second rather than continued;
+  it is also the single biggest difference between this review and the one CI runs.
+- **An empty deep pass is a legitimate result** — but only after the D-sections were actually walked.
+  Say which ones, so "nothing found" is a claim with evidence behind it, and never manufacture a marginal
+  finding to fill the section.
+
+Every deep finding obeys the evidence discipline at the end of the checklist: verifiable claims only,
+checked against the task's stated intent, no confirmations, anchored to a line the diff changed.
 
 ### Step 7 — Produce the review
 Emit the structured output below.
@@ -324,6 +367,7 @@ Ids are `F1`, `F2`, … in the order the findings appear. On a re-review, reuse 
 | New project/module | Emphasize Step 4 | get_project_graph, detect_circular_dependencies |
 | Security-sensitive change | Full, escalate security dimension | detect_antipatterns + manual security review |
 | Test-only change | Steps **5.5** + 5 + 6, criteria 0 + 6 | get_diagnostics, get_test_coverage_map |
+| Migration / cache / contract change | Full + **Step 6 in its own context**, D1–D3 named in scope | All + find_references, get_public_api |
 
 Scale the review to scope — but even a quick review uses the same output format and severity ordering.
 
@@ -332,6 +376,9 @@ Scale the review to scope — but even a quick review uses the same output forma
 ## Anti-patterns to avoid in your own review
 
 - 🔴 **Skipping or skimming the rule sweep** — Step 5.5 has no MCP shortcut, so it is the easiest step to quietly drop. A review that reports zero convention findings on a real diff, or omits the *Convention Violations* section entirely, has almost certainly skipped it. Walk the checklist per file and print the coverage line.
+- 🔴 **Folding the deep pass into the convention sweep** — the second-commonest way a review comes back shallow, after skipping Step 5.5. One continuous read of a diff answers one kind of question; the migration that will not replay, the cache key missing a tenant and the caller three files away are found by re-reading with that frame, not by reading harder. Name the D-sections, and give the pass its own context when the diff earns it.
+- 🔴 **Asserting what you did not check** — "this was renamed in version X", "the framework retries here", "no consumer uses this field". Each is checkable with `find_references`, `git log` or a `Read`; unchecked, each is a confident false statement that costs more than the finding was worth.
+- 🔴 **Flagging the task as a defect** — a warning about an intentional behaviour change or an intentional removal, when the ticket asked for exactly that, is noise the author has to argue down. Check the stated intent before raising it.
 - 🔴 **Waiving a rule because the surrounding code already breaks it** — `code-convention.md` is explicit: match the config, not the drift. Report the new violation; leave the untouched legacy alone.
 - 🔴 **Softening a rule finding into a suggestion** — "you might consider `IOptionsSnapshot` here" misrepresents a hard rule as taste. State it as a violation, cite the clause, give the fix.
 - 🔴 **Quoting the rules from memory** — they change. Read the three rule files at Step 0 every time; when the checklist and a rule file disagree, the rule file wins.
