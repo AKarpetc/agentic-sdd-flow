@@ -13,6 +13,15 @@ A consuming repository may add an **overlay contract** (`.claude/rules/OVERLAY-C
 path configurable in `.claude/agentic-sdd-flow.json`) with its own systems, services and
 infrastructure facts. The overlay extends these rules; it never relaxes them.
 
+## Service first, minimal diff
+
+- 🔴 **The service's own style comes first.** Read the neighbouring code and follow its patterns
+  (constructors, encoding/BOM, naming, layout, caching/DI/helpers); reuse what it has instead of
+  adding an abstraction. The plugin defaults apply where the service has no pattern of its own.
+- 🔴 **Minimal diff.** Change only what the task requires — no unrelated refactors, renames, moved
+  constants, reformatting, whitespace/EOF/encoding changes or style conversions. Propose a refactor
+  and do it only after an explicit yes, as its own task.
+
 ## Structure
 
 - One top-level type per file; filename == type name; file-scoped namespaces.
@@ -23,7 +32,8 @@ infrastructure facts. The overlay extends these rules; it never relaxes them.
 
 ## C#
 
-- 🔴 **No primary constructors for DI-resolved classes.** Explicit ctor + `private readonly _field`.
+- 🔴 **DI constructors match the service.** Primary constructors where the project's DI classes mostly
+  use them; otherwise explicit ctor + `private readonly _field`. Never convert existing classes.
   Records/DTOs may use positional parameters.
 - No `ArgumentNullException` null-guards for injected services — just `_foo = foo;`.
 - 🔴 New properties are `{ get; init; }`, not `{ get; set; }`. Do not rewrite existing `set`

@@ -31,7 +31,8 @@ message per task), optionally the spec it implements, the working directory, the
 | Size | one task = one implementer run: ≤ ~6 files, one commit, one verification | important |
 | Files | each task names the files it creates or modifies, with paths that exist (Glob) or are created by an earlier task | important |
 | Verification | each task says how it is proven (a test task or a named test run); a task adding behaviour without a test task is a gap | important |
-| Conventions | snippets and instructions obey the injected contract: no primary constructors on DI classes, no `IOptions<T>`, NSubstitute + FluentAssertions 7, one type per file, no inline comments, `Result<T>` at the edge, Mediator vs MediatR per the service (check `get_nuget_packages`) | important (a plan that tells the implementer to violate the contract will be rejected at write time) |
+| Conventions | snippets and instructions obey the injected contract: DI constructor style matches the service, no `IOptions<T>`, NSubstitute + FluentAssertions 7, one type per file, no inline comments, `Result<T>` at the edge, Mediator vs MediatR per the service (check `get_nuget_packages`) | important (a plan that tells the implementer to violate the contract will be rejected at write time) |
+| Scope | no task refactors, renames, reformats or converts the style of code the spec does not need changed; such work is proposed as a separate task the user approves | important |
 | Data | a migration is sequenced expand → migrate → contract; hot-table indexes and backfills have their own task and a rollback line | critical for a hot table, important otherwise |
 | Reality | symbols the plan extends exist (`find_symbol`); endpoints it changes exist (`get_endpoint_map`); a plan built on a guessed file name is not approved | important |
 | Contradiction | a task changes a behaviour that a test, a CI assertion, an ADR under `docs/decisions`, a consumer note under `docs/consumers`, a changelog entry or the member's XML doc states the other way, and no task corrects that record or cites a ruling for it — the plan is executing a ticket against the repository's own commitments | important (critical when the contradicted source is executed: a test, CI, a consumer parser) — name the source; `evidence-reconciler` settles it |
@@ -47,7 +48,7 @@ Roslyn before calling a symbol or file missing.
 {
   "approved": false,
   "findings": [
-    { "id": "P1", "severity": "critical|important|minor", "task": 3, "area": "coverage|order|size|files|verification|conventions|data|reality|contradiction|hygiene|constraints", "issue": "Task 3 adds the endpoint but no task adds its integration test; spec §Acceptance 2 is unverified" }
+    { "id": "P1", "severity": "critical|important|minor", "task": 3, "area": "coverage|order|size|files|verification|conventions|scope|data|reality|contradiction|hygiene|constraints", "issue": "Task 3 adds the endpoint but no task adds its integration test; spec §Acceptance 2 is unverified" }
   ],
   "coverage": { "specSections": ["Goal", "Acceptance 1", "Acceptance 2"], "unmapped": ["Acceptance 2"] },
   "summary": "one paragraph"

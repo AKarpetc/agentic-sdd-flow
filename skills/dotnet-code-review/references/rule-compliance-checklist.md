@@ -12,11 +12,11 @@ The authoritative enumeration of what a .NET review **must** check, derived verb
 
 ## Precedence note
 
-`common.md` contradicts `code-convention.md` in two places. `code-convention.md` wins (per [kit-overrides.md](../../../rules/kit-overrides.md)):
+Where an imported skill contradicts `code-convention.md`, `code-convention.md` wins (per [kit-overrides.md](../../../rules/kit-overrides.md)):
 
-| Topic | common.md says | 🔴 Apply this |
+| Topic | Kit says | 🔴 Apply this |
 |---|---|---|
-| Primary constructors | "use them for DI" | **Banned** for DI-resolved classes |
+| Primary constructors | "use them for DI" | **Match the service** — primary where its DI classes mostly use them, explicit otherwise; never demand a conversion |
 | Configuration | "use `IOptions<T>`" | **Never `IOptions<T>`** — `IOptionsSnapshot`/`IOptionsMonitor` |
 
 ## Severity floors
@@ -26,7 +26,7 @@ Assign at least this severity; escalate when the blast radius is larger.
 | Band | Rules | Section |
 |---|---|---|
 | **Critical** | Missing/ignored `CancellationToken`, `.Result`/`.Wait()`, `async void`, `IOptions<T>`, `DateTime.Now`, exceptions used for business flow, feature flag defaulting to `true`, `Arg.Do`, FluentAssertions v8+, Moq in a new test | 🚨 Critical |
-| **Convention** | Primary ctor on a DI class, >1 top-level type per file, filename ≠ type name, `{ get; set; }` on a new property, missing `Result<T>`, `Dictionary<K,V>`/`IReadOnlyCollection<T>` in a gRPC contract, uninitialized contract collection, comment referencing a task/plan artefact, multi-line comment, test naming/AAA/`BeEquivalentTo` breaches | 🔴 Convention Violations |
+| **Convention** | Unrelated churn in the diff (refactors, renames, moved constants, reformatting, EOF/BOM changes, style conversions of untouched code), a DI constructor style that differs from the service's, >1 top-level type per file, filename ≠ type name, `{ get; set; }` on a new property, missing `Result<T>`, `Dictionary<K,V>`/`IReadOnlyCollection<T>` in a gRPC contract, uninitialized contract collection, comment referencing a task/plan artefact, multi-line comment, test naming/AAA/`BeEquivalentTo` breaches | 🔴 Convention Violations |
 | **Nit** | Chained-method line breaks, attribute-per-line, brace/`else` style, named-argument suggestions, `const` over variable, expression bodies | 💡 Minor Tweaks |
 
 ---
@@ -40,7 +40,7 @@ Assign at least this severity; escalate when the blast radius is larger.
 - [ ] Expression bodies used for short methods/properties.
 
 ### A2. Constructors
-- [ ] 🔴 **No primary constructors on DI-resolved classes.** Explicit ctor + `private readonly _field`. Records/DTOs may use positional parameters.
+- [ ] 🔴 **DI constructors match the service.** Primary constructors where the project's DI classes mostly use them; otherwise explicit ctor + `private readonly _field`. Existing classes are not converted either way. Records/DTOs may use positional parameters.
 - [ ] No `ArgumentNullException` null-guards on injected services — `_unitOfWork = unitOfWork;` plain.
 - [ ] Logger never null-checked.
 
@@ -195,7 +195,7 @@ rg -n '\.Result\b|\.Wait\(\)|GetAwaiter\(\)\.GetResult' # A3
 rg -n 'async void'                                   # A3
 rg -n 'CancellationToken cancellationToken = default' # A3 (internal methods)
 rg -n 'Task(<[^>]+>)? \w+\([^)]*\)' -g '*.cs'        # then check each async method has a token
-rg -n '^\s*(internal|public|sealed).*class \w+\('    # A2 primary ctor
+rg -n '^\s*(internal|public|sealed).*class \w+\('    # A2 primary ctor — compare with the service's majority style
 rg -n 'throw new ArgumentNullException'              # A2
 rg -n '\{ get; set; \}'                              # A11 on NEW properties
 rg -n 'new HttpClient\(|catch\s*\(\s*Exception'      # resilience

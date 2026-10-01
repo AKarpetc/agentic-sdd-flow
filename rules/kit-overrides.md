@@ -10,13 +10,13 @@ The skills under [skills/](../skills/) listed below, the knowledge base in [know
 - [single-type-per-file.md](single-type-per-file.md)
 - the project's nearest `.editorconfig` or the project's own nested rules
 
-…the convention is authoritative and the kit guidance is discarded. Never "modernize" existing code toward a kit default that these conventions forbid.
+…the convention is authoritative and the kit guidance is discarded. Never "modernize" existing code toward a kit default, or convert it toward a plugin default; the service's established style comes first ([code-convention.md § Follow the Service First](code-convention.md#follow-the-service-first)).
 
 ## Known Conflicts — Apply This Side
 
 | Topic | Kit says | 🔴 This convention (use this) |
 |---|---|---|
-| **Primary constructors** | Use them for DI (`modern-csharp`, `scaffold`, all architecture skills) | **Banned for DI-resolved classes** — explicit ctor + `private readonly _field`. See [code-convention.md § Constructors](code-convention.md). Records/DTOs may use positional params. |
+| **Primary constructors** | Use them for DI (`modern-csharp`, `scaffold`, all architecture skills) | **Match the service** — primary constructors where the project's DI classes mostly use them; otherwise explicit ctor + `private readonly _field`. Never convert existing classes. See [code-convention.md § Constructors](code-convention.md). Records/DTOs may use positional params. |
 | **Mediator vs MediatR** | Defaults to source-generated `Mediator`; MediatR flagged commercial | **Aligned — the kit's default is now this plugin's too.** Source-generated `Mediator` is the standard for all new services and new CQRS code ([common.md § CQRS with Mediator](common.md)). Existing MediatR services (the services listed in the overlay contract) keep MediatR; migrate only on explicit request, via [knowledge/mediatr-to-mediator-migration.md](../knowledge/mediatr-to-mediator-migration.md). Never register both in one service. |
 | **Assertions** | Plain xUnit `Assert`; FluentAssertions avoided kit-wide | **FluentAssertions v7.2.0** pinned, with `BeEquivalentTo` for object comparison ([test-convention.md](test-convention.md)). v7 is MIT/Apache and its license does not expire — the kit's commercial warning applies only to v8+, which this plugin never uses. |
 | **Mocking** | Barely opinionated | **NSubstitute only** — never Moq ([test-convention.md](test-convention.md)). |

@@ -1,5 +1,9 @@
 # Engineering Principles: .NET & Clean Architecture
 
+## 0. The Service First
+* **Follow the service**: The project's own established patterns win over the defaults below; reuse what it already has (code-convention.md § Follow the Service First).
+* **Minimal diff**: Change only what the task requires; refactoring is proposed, approved, and done separately (code-convention.md § Scope: Minimal Diff).
+
 ## 1. Structural Integrity
 * **One File, One Type**: Every class, interface, record, or enum **must** be in its own file. Combining multiple classes in a single file is strictly prohibited.
 * **CQRS with `Mediator`**: Use the Command Query Responsibility Segregation (CQRS) pattern. All application logic must be implemented via mediator handlers — never a custom dispatcher.
@@ -14,7 +18,7 @@
 
 ## 3. C# 12+ Coding Standards
 * **Modern Collections**: Use collection expressions `[]` instead of `new List<T>()`, `new T[]`, or `Array.Empty<T>()`.
-* **Constructors**: No primary constructors for DI-resolved classes — explicit constructor + `private readonly _field` (see code-convention.md § Constructors).
+* **Constructors**: Match the service — primary constructors for DI-resolved classes where the project mostly uses them, otherwise explicit constructor + `private readonly _field`; never convert existing ones (see code-convention.md § Constructors).
 * **Implicit Typing**: Use `var` when the type is obvious from the right-hand side of the assignment.
 * **Immutability**: Use `record` types for DTOs, Commands, and Queries.
 

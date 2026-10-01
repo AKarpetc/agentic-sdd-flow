@@ -5,6 +5,8 @@
 
 ## Table of Contents
 
+- [Follow the Service First](#follow-the-service-first)
+- [Scope: Minimal Diff](#scope-minimal-diff)
 - [General Conventions 💅](#general-conventions-)
 - [Git 🛣️](#git-️)
 - [API & GRPC](#api--grpc)
@@ -17,6 +19,18 @@
 
 ---
 
+## Follow the Service First
+🔴 **The service's own established style comes first.** Before writing code, read the neighbouring code in the same project and follow its patterns: constructor style, encoding/BOM and line endings, naming, folder layout, and the caching, DI and helper patterns already in use.
+- Reuse what the service already has (its `IMemoryCache.GetOrCreateAsync` pattern, its helpers, its constants) instead of introducing a new abstraction.
+- The plugin's defaults below apply where the service has no established pattern of its own.
+
+## Scope: Minimal Diff
+🔴 **Change only what the task requires.** No opportunistic refactors, renames, moved constants, reformatting, whitespace/EOF/encoding changes, or style conversions of code the task does not touch.
+- Refactoring is separate work: propose it and ask first; do it only after an explicit yes, preferably as its own task and MR.
+- In review, unrelated churn in the diff is a finding: ask to revert it.
+
+---
+
 ## General Conventions 💅
 
 ### Access Modifiers
@@ -25,13 +39,12 @@
 - Use `public` for interfaces and `internal` for their implementations if applicable.
 
 ### Constructors
-- **No Primary Constructors** for classes resolved from DI.
-  - **Why?**
-    - Loss of naming conventions (`_service` vs `service`).
-    - Parameters become mutable.
-    - Scope visibility issues.
-  - **Bad**: `internal class Service(IFooService foo) { ... }`
-  - **Good**: `internal class Service { private readonly IFooService _foo; Service(IFooService foo) { _foo = foo; } }`
+- 🔴 **Match the service's constructor style** for classes resolved from DI.
+  - **The project's DI classes mostly use primary constructors** → new classes use primary constructors too.
+  - **They mostly use explicit constructors, or there is no established pattern** → explicit constructor + `private readonly _field` (the default):
+    `internal class Service { private readonly IFooService _foo; Service(IFooService foo) { _foo = foo; } }`
+  - **Never convert existing classes between the two styles** as a side effect of a task.
+  - Why the default is explicit: primary-constructor parameters are mutable and lose the `_field` naming.
 - **Null Checks**: Do **not** check services for null using `ArgumentNullException` in the constructor.
   - **Bad**: `_unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));`
   - **Good**: `_unitOfWork = unitOfWork;`

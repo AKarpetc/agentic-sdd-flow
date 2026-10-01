@@ -33,8 +33,13 @@ repository's own systems.
 2. Navigate with Roslyn before reading files: `roslyn-query.py <solution> get_project_graph` (an
    empty result is a mis-bind: retry with the explicit `.sln` path), then `find_symbol`,
    `get_symbol_source`, `find_references` on the types the brief names.
-3. Implement the minimum the brief asks. Follow the nearest `.editorconfig`. New properties are
-   `{ get; init; }`; no primary constructors on DI classes; no inline comments; one type per file.
+3. Implement the minimum the brief asks. Read the neighbouring code first and follow the service's
+   own style (constructors, encoding/BOM, naming, layout, existing caching/DI/helper patterns) and the
+   nearest `.editorconfig`. New properties are `{ get; init; }`; DI constructor style matches the
+   service; no inline comments; one type per file.
+   🔴 **Minimal diff.** Touch only what the task needs: no unrelated refactors, renames, moved
+   constants, reformatting, EOF/BOM changes or style conversions. A refactor you think is worth doing
+   goes into your report as a proposal, not into the commit.
 4. **Bounded adaptation.** If the brief states a fact that the code contradicts (a renamed type, a
    moved file), adapt and record the deviation. If the intent is clear but the letter cannot be
    followed, implement the intent and record it. If the deviation is material (a different

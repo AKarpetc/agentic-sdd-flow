@@ -32,6 +32,15 @@ PRIMARY_CTOR = re.compile(
     r"class\s+(?P<name>[A-Za-z_]\w*)(?:<[^>]*>)?\s*\((?P<params>[^)]*)\)"
 )
 DI_PARAM = re.compile(r"\bI[A-Z]\w*(?:<[^>]*>)?\s+\w+|\b\w*(?:Logger|Repository|Service|Client|Factory|Provider|Publisher|Mediator)(?:<[^>]*>)?\s+\w+")
+PRIMARY_CTOR_ANYWHERE = re.compile(PRIMARY_CTOR.pattern, re.MULTILINE)
+CLASS_NAME = re.compile(r"\bclass\s+(?P<name>[A-Za-z_]\w*)")
+EXPLICIT_CTOR = re.compile(
+    r"^[ \t]*(?:(?:public|internal|protected|private)\s+)+(?P<name>[A-Za-z_]\w*)\s*\((?P<params>[^)]*)\)",
+    re.MULTILINE,
+)
+STYLE_SCAN_MAX_FILES = 3000
+STYLE_SCAN_MAX_BYTES = 65536
+_style_cache = {}
 ARTEFACT_COMMENT = re.compile(
     r"^\s*//.*?\b(task\s+\d+|per the (brief|plan|spec)|see\s+[\w./-]+\.md|implementation-plan)",
     re.IGNORECASE,
@@ -193,7 +202,7 @@ def inspect(path, text):
         if primary and primary.group("params").strip() and DI_PARAM.search(primary.group("params")):
             blocking.append(("no-primary-ctor", number,
                              f"Primary constructor on DI-resolved class '{primary.group('name')}' — "
-                             "use an explicit ctor with private readonly _fields."))
+                             "primary constructors are not this service's style; use an explicit ctor with private readonly _fields."))
         for rule, pattern, message, blocks in LINE_RULES:
             if rule == "no-moq" and not is_test:
                 continue
@@ -227,6 +236,113 @@ def inspect(path, text):
         advisory.append(("fluentassertions", 0, "Bare xUnit Assert — use FluentAssertions (.Should()...)."))
 
     return blocking, advisory
+
+
+def ctor_counts(text):
+    """(primary, explicit) counts of DI-resolved classes declared in one source text."""
+    primary = {m.group("name") for m in PRIMARY_CTOR_ANYWHERE.finditer(text)
+               if DI_PARAM.search(m.group("params"))}
+    classes = {m.group("name") for m in CLASS_NAME.finditer(text)}
+    explicit = {m.group("name") for m in EXPLICIT_CTOR.finditer(text)
+                if m.group("name") in classes and DI_PARAM.search(m.group("params"))}
+    return len(primary), len(explicit - primary)
+
+
+def style_root(path):
+    """(root, head): the file's git work tree and its HEAD, or the nearest solution directory."""
+    directory = os.path.dirname(os.path.abspath(path))
+    try:
+        top = subprocess.run(["git", "-C", directory, "rev-parse", "--show-toplevel"],
+                             capture_output=True, text=True, timeout=10)
+        if top.returncode == 0:
+            head = subprocess.run(["git", "-C", directory, "rev-parse", "HEAD"],
+                                  capture_output=True, text=True, timeout=10)
+            return top.stdout.strip(), (head.stdout.strip() if head.returncode == 0 else None)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    current = directory
+    while True:
+        try:
+            if any(name.endswith((".sln", ".slnx")) for name in os.listdir(current)):
+                return current, None
+        except OSError:
+            pass
+        parent = os.path.dirname(current)
+        if parent == current:
+            return directory, None
+        current = parent
+
+
+def source_files(root):
+    """The non-test, non-generated .cs files under root, capped at STYLE_SCAN_MAX_FILES."""
+    try:
+        out = subprocess.run(["git", "-C", root, "ls-files", "-z", "-co", "--exclude-standard", "--", "*.cs"],
+                             capture_output=True, text=True, timeout=10)
+        listed = [os.path.join(root, p) for p in out.stdout.split("\0") if p] if out.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError):
+        listed = None
+    if listed is None:
+        listed = []
+        for current, dirs, files in os.walk(root):
+            dirs[:] = [d for d in dirs if d.lower() not in ("obj", "bin", ".git", "node_modules")]
+            listed += [os.path.join(current, f) for f in files if f.endswith(".cs")]
+    kept = [p for p in listed if not SKIP_PATH.search(p) and not TEST_PATH.search(p)]
+    return kept[:STYLE_SCAN_MAX_FILES]
+
+
+def _style_disk_cache():
+    return os.path.join(asf_config.data_dir(), "ctor-style.json")
+
+
+def service_ctor_counts(path):
+    """(primary, explicit) DI-class constructor counts for the service the file belongs to."""
+    root, head = style_root(path)
+    if root in _style_cache:
+        return _style_cache[root]
+    cache = {}
+    if head:
+        try:
+            with open(_style_disk_cache(), encoding="utf-8") as handle:
+                cache = json.load(handle)
+            entry = cache.get(root)
+            if entry and entry.get("head") == head:
+                _style_cache[root] = (entry["primary"], entry["explicit"])
+                return _style_cache[root]
+        except (OSError, ValueError, KeyError, TypeError):
+            cache = {}
+    target = os.path.abspath(path)
+    primary = explicit = 0
+    for file in source_files(root):
+        if os.path.abspath(file) == target:
+            continue
+        try:
+            with open(file, encoding="utf-8-sig", errors="replace") as handle:
+                p, e = ctor_counts(handle.read(STYLE_SCAN_MAX_BYTES))
+        except OSError:
+            continue
+        primary, explicit = primary + p, explicit + e
+    _style_cache[root] = (primary, explicit)
+    if head:
+        try:
+            cache[root] = {"head": head, "primary": primary, "explicit": explicit}
+            with open(_style_disk_cache(), "w", encoding="utf-8") as handle:
+                json.dump(cache, handle)
+        except OSError:
+            pass
+    return primary, explicit
+
+
+def apply_service_style(path, blocking):
+    """Drops no-primary-ctor when the service's DI classes mostly use primary constructors."""
+    if not any(item[0] == "no-primary-ctor" for item in blocking):
+        return blocking
+    cfg = asf_config.load_config(asf_config.find_project_root(os.path.dirname(path)))
+    if "no-primary-ctor" in (cfg.get("checks") or {}):
+        return blocking
+    primary, explicit = service_ctor_counts(path)
+    if primary > explicit:
+        return [item for item in blocking if item[0] != "no-primary-ctor"]
+    return blocking
 
 
 def keys(violations):
@@ -267,6 +383,7 @@ def main():
         return 0
 
     blocking, advisory = inspect(path, text)
+    blocking = apply_service_style(path, blocking)
     blocking, advisory = apply_config(path, blocking, advisory)
     if not blocking and not advisory:
         return 0

@@ -65,7 +65,7 @@ Always run after Pass 1, without asking. Load `${CLAUDE_PLUGIN_ROOT}/skills/anal
 
 1. **Summary assessment** — one or two sentences
 2. **Root cause** — one paragraph
-3. **Recommended changes** — code blocks only for non-obvious transformations; conventions apply (no primary constructors on DI classes, `IOptionsMonitor` for singletons, `CancellationToken` threaded through)
+3. **Recommended changes** — code blocks only for non-obvious transformations; conventions apply (DI constructor style matches the service, `IOptionsMonitor` for singletons, `CancellationToken` threaded through)
 4. **Expected impact** — a realistic range, and how to verify it (the metric, the benchmark)
 5. **Trade-offs** — one line each
 

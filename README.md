@@ -48,7 +48,8 @@ roslyn-query.py <project-or-solution> --status           # a JSON status line, l
 ```
 In a new session the injected context must show one `<rules-contract enforcement="mandatory">` block
 (plus one `<overlay-contract>` inside it when the repository has an overlay). Ask the session to write a
-`.cs` file with a primary constructor on a DI class: the hook must reject it with `[no-primary-ctor]`.
+`.cs` file with a primary constructor on a DI class in a repository whose DI classes use explicit
+constructors: the hook must reject it with `[no-primary-ctor]`.
 The `Agent` tool's list must contain `agentic-sdd-flow:tests-writer`; a bare `tests-writer` means a
 project-level `.claude/agents/` still shadows the plugin — remove it.
 
@@ -176,7 +177,8 @@ section is the dispatch policy: a whole job in a specialist's domain goes to tha
 `Agent` tool, and loading the matching skill inline instead counts as a violation. The write gate
 compares against the committed version of the file and reports only newly introduced violations,
 keyed by rule and message — a second occurrence of a violation the file already contains is not
-blocked. Full rules: `rules/`.
+blocked. `no-primary-ctor` follows the service: it does not block when most DI classes in the file's
+git work tree already use primary constructors, unless `checks` sets it explicitly. Full rules: `rules/`.
 
 Check ids you can tune per repository: `single-type-per-file`, `filename-parity`, `no-primary-ctor`, `no-ioptions`, `no-sync-over-async`, `no-async-void`, `no-datetime-now`, `no-moq`,
 `no-null-guard`, `no-arg-do`, `no-task-fromresult-stub`, `prefer-init`, `fluentassertions-v7`, `no-artefact-comments`, `no-inline-comments`, `xmldoc-brevity`, `fluentassertions`.

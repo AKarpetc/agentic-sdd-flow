@@ -86,6 +86,17 @@ class PrimaryConstructors(unittest.TestCase):
         self.assertNotIn("no-primary-ctor", blocking)
 
 
+class ConstructorStyleCounts(unittest.TestCase):
+    def test_counts_primary_and_explicit_di_classes(self):
+        primary = "internal sealed class A(IBar bar,\n    ILogger<A> logger)\n{\n}\n"
+        self.assertEqual(check_rules.ctor_counts(primary), (1, 0))
+        self.assertEqual(check_rules.ctor_counts(CLEAN), (0, 1))
+
+    def test_value_only_constructors_are_not_counted(self):
+        text = "internal sealed class A(int count)\n{\n}\n"
+        self.assertEqual(check_rules.ctor_counts(text), (0, 0))
+
+
 class LineRules(unittest.TestCase):
     def test_ioptions_blocks_outside_tests(self):
         blocking, _ = ids(SRC, wrap("IOptions<Settings> options = null!;"))
@@ -326,6 +337,81 @@ class HookEndToEnd(unittest.TestCase):
         self.write(".claude/agentic-sdd-flow.json", json.dumps({"checks": {"no-primary-ctor": "off"}}))
         path = self.write("src/Probe.cs", "namespace P;\n\ninternal class Probe(IFoo foo)\n{\n}\n")
         self.assertEqual(self.run_hook({"tool_input": {"file_path": path}}), (0, "", ""))
+
+
+class ServiceConstructorStyle(unittest.TestCase):
+    """The primary-constructor gate follows the style the service already uses."""
+
+    PRIMARY = "namespace P;\n\ninternal sealed class {name}(IBar bar)\n{{\n}}\n"
+    EXPLICIT = ("namespace P;\n\ninternal sealed class {name}\n{{\n    private readonly IBar _bar;\n\n"
+                "    public {name}(IBar bar)\n    {{\n        _bar = bar;\n    }}\n}}\n")
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = os.path.realpath(self._tmp.name)
+        self.data = os.path.join(self.root, ".data")
+
+    def write(self, rel, text):
+        path = os.path.join(self.root, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        return path
+
+    def service(self, primary, explicit, git=True):
+        for i in range(primary):
+            self.write(f"src/P{i}.cs", self.PRIMARY.format(name=f"P{i}"))
+        for i in range(explicit):
+            self.write(f"src/E{i}.cs", self.EXPLICIT.format(name=f"E{i}"))
+        if git:
+            cmd = ["git", "-C", self.root, "-c", "user.name=t", "-c", "user.email=t@example.com"]
+            subprocess.run(["git", "init", "-q", self.root], check=True)
+            subprocess.run(cmd + ["add", "."], check=True)
+            subprocess.run(cmd + ["commit", "-q", "--allow-empty", "-m", "service"], check=True)
+        else:
+            self.write("Service.sln", "")
+
+    def run_new_primary(self):
+        path = self.write("src/Probe.cs", self.PRIMARY.format(name="Probe"))
+        proc = subprocess.run([sys.executable, os.path.join(_paths.SCRIPTS, "check-rules.py")],
+                              input=json.dumps({"tool_input": {"file_path": path}}),
+                              capture_output=True, text=True, timeout=60,
+                              env=_paths.hook_env(CLAUDE_PLUGIN_DATA=self.data))
+        return proc.returncode, proc.stderr
+
+    def test_primary_majority_service_accepts_a_new_primary_constructor(self):
+        self.service(primary=3, explicit=1)
+        self.assertEqual(self.run_new_primary(), (0, ""))
+
+    def test_primary_majority_is_read_from_the_cache_on_the_second_write(self):
+        self.service(primary=3, explicit=1)
+        self.assertEqual(self.run_new_primary()[0], 0)
+        self.assertTrue(os.path.isfile(os.path.join(self.data, "ctor-style.json")))
+        self.assertEqual(self.run_new_primary()[0], 0)
+
+    def test_primary_majority_without_git_uses_the_solution_directory(self):
+        self.service(primary=2, explicit=0, git=False)
+        self.assertEqual(self.run_new_primary()[0], 0)
+
+    def test_explicit_majority_service_still_blocks(self):
+        self.service(primary=1, explicit=3)
+        code, err = self.run_new_primary()
+        self.assertEqual(code, 2)
+        self.assertIn("[no-primary-ctor]", err)
+
+    def test_tie_blocks(self):
+        self.service(primary=2, explicit=2)
+        self.assertEqual(self.run_new_primary()[0], 2)
+
+    def test_no_established_pattern_blocks(self):
+        self.service(primary=0, explicit=0)
+        self.assertEqual(self.run_new_primary()[0], 2)
+
+    def test_explicit_checks_tier_overrides_the_service_style(self):
+        self.write(".claude/agentic-sdd-flow.json", json.dumps({"checks": {"no-primary-ctor": "block"}}))
+        self.service(primary=3, explicit=0)
+        self.assertEqual(self.run_new_primary()[0], 2)
 
 
 if __name__ == "__main__":
