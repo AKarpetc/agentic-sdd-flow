@@ -33,7 +33,7 @@ The rules contract injected at start and [test-convention.md](../rules/test-conv
 5. **Coverage risk** — untested types from step 1 ranked by public surface size.
 6. **Grade (only when the caller supplies a PR diff of tests)** — load `${CLAUDE_PLUGIN_ROOT}/skills/grade-tests/SKILL.md` and grade the new or changed tests; put the table in the report.
 
-The vendored test skills were copied as single files: follow their own workflow and ignore pointers to skills this plugin does not ship (test-anti-patterns, test-smell-detection, coverage-analysis, crap-score, test-tagging, mtp-hot-reload).
+The vendored test skills were copied as single files: follow their own workflow and ignore pointers to skills this plugin does not ship (test-anti-patterns, test-smell-detection, test-tagging, mtp-hot-reload). Measured CRAP and mutation scores on a branch diff come from the `dotnet-quality-gates` skill, not from this audit.
 
 ## Final Report (always end with this)
 

@@ -52,8 +52,8 @@ that question with a one-row-per-test verdict that fits in a comment table.
   `test-anti-patterns` (pragmatic) or `test-smell-detection` (formal) and
   let the `test-quality-auditor` agent orchestrate.
 - The caller wants to *write* new tests — use the tests-writer agent.
-- The caller wants to measure code coverage or CRAP scores — use
-  `coverage-analysis` or `crap-score` (.NET only).
+- The caller wants to measure code coverage, CRAP scores or surviving
+  mutants — use `dotnet-quality-gates` (.NET only).
 - The caller wants to fix issues directly in test code — invoke the
   appropriate editing skill.
 - No specific list of tests is provided. Do **not** try to grade every test

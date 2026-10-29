@@ -294,7 +294,7 @@ end-to-end through stdin (including the committed-baseline diff and `checks` re-
 three injection modes and the navigator version note, the config loader, the Roslyn resolver /
 pin / launcher scripts against a fixture repository, and a structural lint: manifests, hooks,
 MCP entries, agent and skill frontmatter, navigator tool names, hand-off keys, README check ids,
-relative links and the workflow scripts. `.github/workflows/tests.yml` runs the same on push.
+relative links, the workflow scripts and the `dotnet-quality-gates` scripts (CRAP over a branch diff, Stryker survivors). `.github/workflows/tests.yml` runs the same on push.
 
 Work distribution is pinned twice. Statically, `tests/test_manifest.py` asserts which agent each
 workflow phase dispatches to (implementer never reviews, reviewer never implements, fan-out phases

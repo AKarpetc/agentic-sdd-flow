@@ -9,9 +9,9 @@ description: >-
   NOT USE FOR: suite organization, taxonomy,
   metadata, or distribution reports (test-tagging); .NET line-vs-branch or
   Cobertura interpretation, arithmetic, plateaus, project-wide coverage gaps,
-  or coverage-backed test/CRAP priorities (coverage-analysis; use native
-  coverage tooling outside .NET); named-target CRAP (crap-score); new suites
-  (the tests-writer agent); assertion/smell audits; or mutation tools.
+  coverage-backed CRAP scores or real mutation runs (dotnet-quality-gates;
+  use native coverage tooling outside .NET); new suites (the tests-writer
+  agent); or assertion/smell audits.
 license: MIT
 ---
 
