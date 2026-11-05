@@ -458,8 +458,8 @@ class Tiers(unittest.TestCase):
     def test_design_pipeline_can_run_compact(self):
         text = read(os.path.join(ROOT, "workflows", "architecture-design.js"))
         self.assertIn("const compact = String(scope).toLowerCase() === 'compact'", text)
-        self.assertIn("const runThreats = !compact || trustBoundaryChange", text)
-        self.assertIn("const runData = !compact || dataChange", text)
+        self.assertIn("const runThreats = !recordOnly && (!compact || trustBoundaryChange)", text)
+        self.assertIn("const runData = !recordOnly && (!compact || dataChange)", text)
         self.assertIn("(compact ? 1 : 3)", text, "a compact panel scores once instead of five times")
 
 

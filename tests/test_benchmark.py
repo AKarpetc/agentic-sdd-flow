@@ -30,7 +30,7 @@ class Benchmark(unittest.TestCase):
 
     def test_manifest_covers_every_class_and_agrees_with_the_files(self):
         classes = {meta["class"] for meta in MANIFEST.values()}
-        self.assertEqual(classes, {"simple", "medium", "complex", "vague", "conflict"}, "the suite must span the whole size range and the conflict class")
+        self.assertEqual(classes, {"simple", "medium", "complex", "vague", "conflict", "deep"}, "the suite must span the whole size range, the conflict class and the cross-service deep task")
         self.assertTrue({meta["expectedTier"] for meta in MANIFEST.values()} <= {"quick", "mix", "light", "standard", "deep"})
         keys = [meta["key"] for meta in MANIFEST.values()]
         self.assertEqual(len(keys), len(set(keys)), "task keys must be unique: git hygiene is scored per key")
@@ -163,9 +163,11 @@ class Benchmark(unittest.TestCase):
 
     def test_runner_lifts_the_headless_idle_ceiling(self):
         run = load("run")
-        env = run.session_env()
+        env = run.session_env(BENCH)
         self.assertEqual(env.get("CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS"), "0", "claude -p aborts a background Workflow after 10 idle minutes otherwise")
         self.assertNotIn("CLAUDECODE", env)
+        self.assertEqual(env["CLAUDE_PROJECT_DIR"], os.path.abspath(BENCH), "the host repository's config must not reach the session")
+        self.assertEqual(env["ASF_ROUTING_POLICY"], "off")
 
     def test_runner_keeps_the_prompt_out_of_argv(self):
         run = load("run")
@@ -200,7 +202,10 @@ class Benchmark(unittest.TestCase):
         self.assertEqual(set(acceptance.ACCEPTANCE), set(MANIFEST))
         self.assertEqual(set(acceptance.PLANTED), set(MANIFEST))
         for task, fn in acceptance.ACCEPTANCE.items():
-            checks = fn("http://127.0.0.1:1")  # nothing listens: every check fails, but the names must be stable
+            # nothing listens: every check fails, but the names must be stable
+            fixture = acceptance.fixture_for(task)
+            dead = acceptance.base_urls(fixture, 1)
+            checks = fn(dead if len(fixture["services"]) > 1 else "http://127.0.0.1:1")
             with self.subTest(task=task):
                 self.assertGreaterEqual(len(checks), 4)
                 self.assertIn(acceptance.PLANTED[task], [c["name"] for c in checks])
