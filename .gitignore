@@ -7,6 +7,8 @@ evals/fixtures/**/bin/
 evals/fixtures/**/obj/
 evals/benchmark/fixture/**/bin/
 evals/benchmark/fixture/**/obj/
+# Benchmark output carries local paths and session logs; keep it out of git.
+results/
 results/**/T[0-9]*-*/
 # Routing-eval workspaces: a git repo per case, named after the case.
 results/**/*-routing/*/
