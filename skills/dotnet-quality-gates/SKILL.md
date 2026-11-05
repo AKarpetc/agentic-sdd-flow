@@ -7,6 +7,8 @@ description: Use before opening or updating an MR on a .NET branch that changes 
 
 Two deterministic gates over the lines the branch changed: **CRAP < 10** per method (coverage × complexity) and **no surviving mutant** (Stryker.NET). Scripts live in `${CLAUDE_PLUGIN_ROOT}/skills/dotnet-quality-gates/scripts/`.
 
+Gates adapted from Robert C. Martin's [`ub-mode`](https://github.com/unclebob/ub-mode) (MIT): its Crapper and Mutator rules, ported from Clojure tooling to coverlet and Stryker.NET.
+
 ## Variables — repeat them in every shell call
 
 ```bash
